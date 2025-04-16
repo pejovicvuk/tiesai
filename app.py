@@ -50,7 +50,11 @@ def create_rag_chain():
     template = """You are an assistant for TIES.Connect software documentation. Use the following pieces of context to answer the question at the end.
     
     Guidelines:
-    - If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    - ALWAYS maintain context from previous questions in the conversation.
+    - If you don't immediately know the answer, look for related concepts in the context that might help.
+    - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
+    - If you recognize keywords (like "book", "job", "order") but need clarification, ask specific follow-up questions.
+    - ALWAYS provide the actual information from documentation rather than telling users to "refer to documentation."
     - Keep your answers concise and focused on the documentation provided.
     - Use bullet points or numbered lists for step-by-step instructions.
     - When explaining features, mention their business benefits.
@@ -115,11 +119,23 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
     # Display assistant response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
+            # Create context that includes recent conversation history
+            conversation_history = ""
+            if len(st.session_state.messages) > 1:
+                # Get last 3 exchanges (or fewer if not available)
+                recent_messages = st.session_state.messages[-6:] if len(st.session_state.messages) >= 6 else st.session_state.messages
+                for msg in recent_messages:
+                    prefix = "User: " if msg["role"] == "user" else "Assistant: "
+                    conversation_history += f"{prefix}{msg['content']}\n\n"
+            
+            # Modify the prompt to include conversation history
+            enhanced_prompt = f"Previous conversation:\n{conversation_history}\n\nCurrent question: {prompt}"
+            
             # Get answer from RAG chain
-            answer = rag_chain.invoke(prompt)
+            answer = rag_chain.invoke(enhanced_prompt)
             
             # Get sources
-            docs = retriever.get_relevant_documents(prompt)
+            docs = retriever.get_relevant_documents(enhanced_prompt)
             sources = [doc.metadata.get("title", "Unknown") for doc in docs]
             unique_sources = list(set(sources))
             
