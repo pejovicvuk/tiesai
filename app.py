@@ -1,12 +1,12 @@
 import streamlit as st
 import os
+import re
 from dotenv import load_dotenv
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI
+# Import functions from aiAssistant
+from aiAssistant import ask_question, find_image_path
+
+# Load environment variables
+load_dotenv()
 
 # Set page title and favicon
 st.set_page_config(
@@ -15,70 +15,63 @@ st.set_page_config(
     layout="wide"
 )
 
-load_dotenv()
-
-# Try to get API key from Streamlit secrets
-openai_api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
+# Get API key from environment variable
+openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
-    st.error("OpenAI API key not found. Please set the OPENAI_API_KEY in Streamlit secrets.")
+    st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     st.stop()
-
-# Set the API key for OpenAI
-os.environ["OPENAI_API_KEY"] = openai_api_key
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Load the FAISS index
-@st.cache_resource
-def load_vectorstore():
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.load_local(
-        "./faiss_index", 
-        embeddings, 
-        allow_dangerous_deserialization=True
-    )
-    return vectorstore
+# Function to get conversation history as text
+def get_conversation_history():
+    history = ""
+    for msg in st.session_state.messages:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history += f"{role}: {msg['content']}\n\n"
+    return history
 
-# Create the RAG chain
-@st.cache_resource
-def create_rag_chain():
-    vectorstore = load_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+# Function to display response with images
+def display_response_with_images(response):
+    # Regular expression to find image references
+    image_pattern = r'\[image_id: (\d+)\]'
+    parts = re.split(image_pattern, response)
     
-    template = """You are an assistant for TIES.Connect software documentation. Use the following pieces of context to answer the question at the end.
+    if len(parts) == 1:
+        # No image references found
+        st.markdown(response)
+        return
     
-    Guidelines:
-    - ALWAYS maintain context from previous questions in the conversation.
-    - If you don't immediately know the answer, look for related concepts in the context that might help.
-    - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
-    - If you recognize keywords (like "book", "job", "order") but need clarification, ask specific follow-up questions.
-    - ALWAYS provide the actual information from documentation rather than telling users to "refer to documentation."
-    - Keep your answers concise and focused on the documentation provided.
-    - Use bullet points or numbered lists for step-by-step instructions.
-    - When explaining features, mention their business benefits.
-    - If relevant, suggest related features or settings that might be helpful.
-    - Format your response with markdown for better readability.
-    - If the user asks about configuration, include specific field names and options.
-    
-    Context:
-    {context}
-    
-    Question: {question}
-    Answer:"""
-
-    prompt = PromptTemplate.from_template(template)
-    llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
-    
-    rag_chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
-    return rag_chain, retriever
+    # Display text and images alternately
+    for i in range(0, len(parts)):
+        if i == 0 or i % 2 == 0:
+            # Even indices are text
+            st.markdown(parts[i])
+        else:
+            # Odd indices are image IDs
+            image_id = parts[i]
+            try:
+                # Find the image path
+                image_path = find_image_path(image_id)
+                if image_path:
+                    # Get absolute path
+                    if image_path.startswith("./"):
+                        image_path = image_path[2:]  # Remove leading ./
+                    
+                    # Construct absolute path
+                    base_dir = os.path.dirname(__file__)
+                    absolute_path = os.path.join(base_dir, image_path)
+                    
+                    if os.path.exists(absolute_path):
+                        st.image(absolute_path, caption=f"Image {image_id}")
+                    else:
+                        st.warning(f"Image file not found: {absolute_path}")
+                else:
+                    st.warning(f"Image {image_id} not found in documentation")
+            except Exception as e:
+                st.error(f"Could not load image {image_id}: {str(e)}")
 
 # Create header
 st.title("TIES.Connect Documentation Assistant")
@@ -92,20 +85,19 @@ with st.sidebar:
     
     It searches through the documentation to find relevant information and uses GPT to generate helpful responses.
     """)
-    
-
-# Load the RAG chain
-rag_chain, retriever = create_rag_chain()
 
 # Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        
-        # Display sources if available
-        if "sources" in message and message["sources"]:
-            with st.expander("Sources"):
-                st.markdown("\n".join([f"- {source}" for source in message["sources"]]))
+        if message["role"] == "user":
+            st.markdown(message["content"])
+        else:
+            display_response_with_images(message["content"])
+            
+            # Display sources if available
+            if "sources" in message and message["sources"]:
+                with st.expander("Sources"):
+                    st.markdown("\n".join([f"- {source}" for source in message["sources"]]))
 
 # Get user input
 if prompt := st.chat_input("Ask a question about TIES.Connect"):
@@ -119,28 +111,14 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
     # Display assistant response
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # Create context that includes recent conversation history
-            conversation_history = ""
-            if len(st.session_state.messages) > 1:
-                # Get last 3 exchanges (or fewer if not available)
-                recent_messages = st.session_state.messages[-6:] if len(st.session_state.messages) >= 6 else st.session_state.messages
-                for msg in recent_messages:
-                    prefix = "User: " if msg["role"] == "user" else "Assistant: "
-                    conversation_history += f"{prefix}{msg['content']}\n\n"
+            # Get conversation history
+            conversation_history = get_conversation_history()
             
-            # Modify the prompt to include conversation history
-            enhanced_prompt = f"Previous conversation:\n{conversation_history}\n\nCurrent question: {prompt}"
+            # Get answer from RAG chain with conversation history
+            answer, unique_sources, image_references = ask_question(prompt, conversation_history)
             
-            # Get answer from RAG chain
-            answer = rag_chain.invoke(enhanced_prompt)
-            
-            # Get sources
-            docs = retriever.get_relevant_documents(enhanced_prompt)
-            sources = [doc.metadata.get("title", "Unknown") for doc in docs]
-            unique_sources = list(set(sources))
-            
-            # Display answer
-            st.markdown(answer) 
+            # Display answer with images
+            display_response_with_images(answer)
             
             # Display sources
             if unique_sources:
