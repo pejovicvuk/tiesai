@@ -136,8 +136,12 @@ def create_rag_chain(conversation_history=""):
             "conversation_history": conversation_history
         }
     
+    # Fixed RAG chain creation
     rag_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        {
+            "context": retriever | format_docs, 
+            "question": RunnablePassthrough()
+        }
         | add_conversation_history
         | prompt
         | llm
