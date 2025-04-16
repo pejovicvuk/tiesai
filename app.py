@@ -17,13 +17,14 @@ st.set_page_config(
 
 load_dotenv()
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
+# Try to get API key from Streamlit secrets
+openai_api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
 if not openai_api_key:
-    st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
+    st.error("OpenAI API key not found. Please set the OPENAI_API_KEY in Streamlit secrets.")
     st.stop()
-# Initialize session state for chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+
+# Set the API key for OpenAI
+os.environ["OPENAI_API_KEY"] = openai_api_key
 
 # Load the FAISS index
 @st.cache_resource
