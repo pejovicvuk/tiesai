@@ -140,7 +140,7 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
             unique_sources = list(set(sources))
             
             # Display answer
-            st.markdown(answer)
+            st.markdown(answer) 
             
             # Display sources
             if unique_sources:
