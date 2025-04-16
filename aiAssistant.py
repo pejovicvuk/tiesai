@@ -91,10 +91,13 @@ def ask_question(question, conversation_history=""):
     - ALWAYS provide the actual information from documentation rather than telling users to "refer to documentation."
     - Keep your answers concise and focused on the documentation provided.
     - Use bullet points or numbered lists for step-by-step instructions.
-    - When explaining features, mention their business benefits.
-    - If relevant, suggest related features or settings that might be helpful.
-    - Format your response with markdown for better readability.
-    - If the user asks about configuration, include specific field names and options.
+    - Format your response with markdown for better readability (headers, bold, lists).
+    - If the user asks about configuration, include specific field names, options, and default values.
+    - When explaining processes, clearly indicate the sequence of steps and any dependencies.
+    - If multiple approaches exist for a task, briefly outline each option with its use case.
+    - For technical terms specific to TIES.Connect, provide brief definitions when first mentioned.
+    - If a feature has limitations or requirements, clearly state them.
+    - When appropriate, include examples to illustrate concepts.
     
     Previous conversation:
     {conversation_history}
