@@ -26,6 +26,10 @@ if not openai_api_key:
 # Set the API key for OpenAI
 os.environ["OPENAI_API_KEY"] = openai_api_key
 
+# Initialize session state for chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 # Load the FAISS index
 @st.cache_resource
 def load_vectorstore():
