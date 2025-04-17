@@ -33,14 +33,14 @@ def get_conversation_history():
     return history
 
 # Create header
-st.title("TIES.Connect Documentation Assistant")
-st.markdown("Ask questions about TIES.Connect documentation")
+st.title("TIES Documentation Assistant")
+st.markdown("Ask questions about TIES documentation")
 
 # Create the sidebar with information
 with st.sidebar:
     st.title("About")
     st.markdown("""
-    This assistant uses RAG (Retrieval Augmented Generation) to answer questions about TIES.Connect documentation.
+    This assistant uses RAG (Retrieval Augmented Generation) to answer questions about TIES documentation.
     
     It searches through the documentation to find relevant information and uses GPT to generate helpful responses.
     """)
