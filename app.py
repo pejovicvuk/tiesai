@@ -9,10 +9,95 @@ load_dotenv()
 
 # Set page title and favicon
 st.set_page_config(
-    page_title="TIES.Connect Documentation Assistant",
-    page_icon="📚",
-    layout="wide"
+    page_title="TIES Documentation Assistant",
+    page_icon="🔷",  # Blue diamond emoji to match Trilogy's blue branding
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# Custom CSS to style the app with Trilogy's color scheme
+st.markdown("""
+<style>
+    /* Main area background and text colors */
+    .stApp {
+        background-color: #f8f9fa;
+        color: #1e1e1e;
+    }
+    
+    /* Header styling */
+    .main .block-container h1 {
+        color: #0e2b3d;  /* Dark blue from Trilogy's branding */
+        font-weight: 600;
+    }
+    
+    /* Chat message styling */
+    .stChatMessage {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* User message styling - using Trilogy's blue */
+    .stChatMessage[data-testid="stChatMessageUser"] {
+        background-color: #e6f2ff;
+        border-left: 4px solid #1e88e5;
+    }
+    
+    /* Assistant message styling */
+    .stChatMessage[data-testid="stChatMessageAssistant"] {
+        background-color: #ffffff;
+        border-left: 4px solid #0e2b3d;
+    }
+    
+    /* Sidebar styling with Trilogy's blue */
+    .css-1d391kg, .css-1wrcr25, .css-6qob1r {
+        background-color: #0e2b3d;
+    }
+    
+    .sidebar .sidebar-content {
+        background-color: #0e2b3d;
+        color: white;
+    }
+    
+    /* Button styling using Trilogy's blue */
+    .stButton>button {
+        background-color: #1e88e5;
+        color: white;
+        border-radius: 4px;
+        border: none;
+        padding: 8px 16px;
+        font-weight: 500;
+    }
+    
+    .stButton>button:hover {
+        background-color: #0d47a1;
+    }
+    
+    /* Input box styling */
+    .stTextInput>div>div>input {
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #f1f8fe;
+        border-radius: 4px;
+    }
+    
+    /* Link color */
+    a {
+        color: #1e88e5;
+    }
+    
+    /* Title styling to match Trilogy's branding */
+    h1, h2, h3 {
+        color: #0e2b3d;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Get API key from environment variable
 openai_api_key = os.getenv("OPENAI_API_KEY")
