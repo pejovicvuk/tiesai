@@ -88,7 +88,7 @@ def ask_question(question, conversation_history=""):
     - If you don't immediately know the answer, look for related concepts in the context that might help.
     - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
     - If you recognize keywords (like "book", "job", "order") but need clarification, ask specific follow-up questions.
-    - ALWAYS provide the actual information from documentation rather than telling users to "refer to documentation."
+    - NEVER refer users to external documentation or guides. Always provide complete answers directly.
     - Keep your answers concise and focused on the documentation provided.
     - Use bullet points or numbered lists for step-by-step instructions.
     - Format your response with markdown for better readability (headers, bold, lists).
@@ -98,6 +98,7 @@ def ask_question(question, conversation_history=""):
     - For technical terms specific to TIES.Connect, provide brief definitions when first mentioned.
     - If a feature has limitations or requirements, clearly state them.
     - When appropriate, include examples to illustrate concepts.
+    - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
     
     Previous conversation:
     {conversation_history}
