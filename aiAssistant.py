@@ -100,6 +100,7 @@ def ask_question(question, conversation_history=""):
     - If a feature has limitations or requirements, clearly state them.
     - When appropriate, include examples to illustrate concepts.
     - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
+    - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
     
     Previous conversation:
     {conversation_history}
@@ -130,3 +131,10 @@ def ask_question(question, conversation_history=""):
     unique_sources = list(set(sources))
     
     return answer, unique_sources
+
+# Example usage
+if __name__ == "__main__":
+    question = "How do I configure Natural Gas Intelligence in TIES.Connect?"
+    answer, sources = ask_question(question)
+    print(f"Answer: {answer}")
+    print(f"Sources: {', '.join(sources)}")
