@@ -102,7 +102,14 @@ def ask_question(question, conversation_history=""):
     - When appropriate, include examples to illustrate concepts.
     - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
     - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
-    - When relevant, reference images from the documentation by including a line like: [IMAGE: image_id - brief description]. For example: [IMAGE: 33996955310861 - Term Supply Planning screen]
+    
+    IMPORTANT IMAGE GUIDELINES:
+    - When discussing a feature that has an associated image, place an image reference EXACTLY where it belongs in your response.
+    - Insert image references at the appropriate point in your text, not just at the end of your response.
+    - If a section has multiple images, include ALL of them at their correct positions in your text.
+    - Use this format for image references: [IMAGE: image_id - brief description]
+    - Example: [IMAGE: 33996955310861 - Term Supply Planning screen]
+    - The image should appear immediately after the text that describes what the image shows.
     
     Previous conversation:
     {conversation_history}
@@ -132,4 +139,5 @@ def ask_question(question, conversation_history=""):
     sources = [doc.metadata.get("title", "Unknown") for doc in docs]
     unique_sources = list(set(sources))
     
-    return answer, unique_sources 
+    return answer, unique_sources
+    
