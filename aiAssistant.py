@@ -131,10 +131,3 @@ def ask_question(question, conversation_history=""):
     unique_sources = list(set(sources))
     
     return answer, unique_sources
-
-# Example usage
-if __name__ == "__main__":
-    question = "How do I configure Natural Gas Intelligence in TIES.Connect?"
-    answer, sources = ask_question(question)
-    print(f"Answer: {answer}")
-    print(f"Sources: {', '.join(sources)}")
