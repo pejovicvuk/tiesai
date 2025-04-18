@@ -32,3 +32,8 @@ ENV/
 .vscode/
 *.swp
 *.swo
+
+# Custom folders and files
+trilogyTIESimages/
+imageUpload.py
+jsonExtraction.py

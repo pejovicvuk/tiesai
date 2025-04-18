@@ -73,8 +73,12 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
             # Get answer from RAG chain with conversation history
             answer, unique_sources = ask_question(prompt, conversation_history)
             
+            # Process answer to handle image references
+            # This is a simple implementation - you might want to enhance it
+            processed_answer = answer
+            
             # Display answer
-            st.markdown(answer)
+            st.markdown(processed_answer)
             
             # Display sources
             if unique_sources:

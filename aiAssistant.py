@@ -77,6 +77,7 @@ def get_vectorstore():
     return vectorstore
 
 # Function to query the system with conversation history
+# Function to query the system with conversation history
 def ask_question(question, conversation_history=""):
     vectorstore = get_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
@@ -101,6 +102,7 @@ def ask_question(question, conversation_history=""):
     - When appropriate, include examples to illustrate concepts.
     - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
     - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
+    - When relevant, reference images from the documentation by including a line like: [IMAGE: image_id - brief description]. For example: [IMAGE: 33996955310861 - Term Supply Planning screen]
     
     Previous conversation:
     {conversation_history}
@@ -125,9 +127,9 @@ def ask_question(question, conversation_history=""):
     # Get answer
     answer = rag_chain.invoke(question)
     
-    # Get sources
+    # Get sources and images
     docs = retriever.get_relevant_documents(question)
     sources = [doc.metadata.get("title", "Unknown") for doc in docs]
     unique_sources = list(set(sources))
     
-    return answer, unique_sources
+    return answer, unique_sources 
