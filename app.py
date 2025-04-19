@@ -1,8 +1,11 @@
 import streamlit as st
 import os
+import re
 from dotenv import load_dotenv
 # Import functions from aiAssistant
 from aiAssistant import ask_question
+# Import image handler
+from image_handler import get_image_base64
 
 # Load environment variables
 load_dotenv()
@@ -32,6 +35,25 @@ def get_conversation_history():
         history += f"{role}: {msg['content']}\n\n"
     return history
 
+# Function to process AI response and replace image references
+def process_response(response):
+    # Regular expression to find image references
+    image_pattern = r'\[IMAGE: (\d+) - (.*?)\]'
+    
+    # Find all image references
+    image_refs = re.findall(image_pattern, response)
+    
+    # Replace each image reference with an actual image
+    for image_id, description in image_refs:
+        image_base64 = get_image_base64(image_id)
+        if image_base64:
+            # Create HTML for the image with the description as alt text
+            img_html = f'<img src="{image_base64}" alt="{description}" style="max-width: 100%; margin: 10px 0;">'
+            # Replace the reference with the actual image
+            response = response.replace(f'[IMAGE: {image_id} - {description}]', img_html)
+    
+    return response
+
 # Create header
 st.title("TIES Documentation Assistant")
 st.markdown("Ask questions about TIES documentation")
@@ -48,7 +70,11 @@ with st.sidebar:
 # Display chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        if message["role"] == "assistant":
+            # Process assistant messages to display images
+            st.markdown(process_response(message["content"]), unsafe_allow_html=True)
+        else:
+            st.markdown(message["content"])
         
         # Display sources if available
         if "sources" in message and message["sources"]:
@@ -74,11 +100,10 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
             answer, unique_sources = ask_question(prompt, conversation_history)
             
             # Process answer to handle image references
-            # This is a simple implementation - you might want to enhance it
-            processed_answer = answer
+            processed_answer = process_response(answer)
             
-            # Display answer
-            st.markdown(processed_answer)
+            # Display answer with images
+            st.markdown(processed_answer, unsafe_allow_html=True)
             
             # Display sources
             if unique_sources:
