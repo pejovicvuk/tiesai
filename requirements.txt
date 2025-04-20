@@ -6,4 +6,3 @@ langchain-text-splitters
 faiss-cpu
 python-dotenv
 pymongo
-base64
