@@ -7,9 +7,6 @@ from aiAssistant import ask_question
 # Import image handler
 from image_handler import get_image_base64
 
-# Load environment variables
-load_dotenv()
-
 # Set page title and favicon
 st.set_page_config(
     page_title="TIES Documentation Assistant",
@@ -18,7 +15,7 @@ st.set_page_config(
 )
 
 # Get API key from environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 if not openai_api_key:
     st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     st.stop()

@@ -9,12 +9,13 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
+import streamlit as st
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Get API key from environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 if not openai_api_key:
     print("Error: OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     exit(1)
