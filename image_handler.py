@@ -34,6 +34,8 @@ def get_image_by_id(image_id):
     if grid_out:
         # Return the image data
         return grid_out.read()
+    else:
+        print(f"Image with ID {image_id} not found")
     return None
 
 def get_image_base64(image_id):
