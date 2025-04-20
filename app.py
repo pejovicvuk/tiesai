@@ -59,11 +59,10 @@ def process_response(response):
     # Replace each image reference with an actual image
     for image_id, description in image_refs:
         image_base64 = get_image_base64(image_id)
-        if image_base64:
-            # Create HTML for the image with the description as alt text
-            img_html = f'<img src="{image_base64}" alt="{description}" style="max-width: 100%; margin: 10px 0;">'
-            # Replace the reference with the actual image
-            response = response.replace(f'[IMAGE: {image_id} - {description}]', img_html)
+        # Create HTML for the image with the description as alt text
+        img_html = f'<img src="{image_base64}" alt="{description}" style="max-width: 100%; margin: 10px 0;">'
+        # Replace the reference with the actual image
+        response = response.replace(f'[IMAGE: {image_id} - {description}]', img_html)
     
     return response
 
@@ -123,9 +122,10 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
                 with st.expander("Sources"):
                     st.markdown("\n".join([f"- {source}" for source in unique_sources]))
             
-            # Add assistant message to chat history
+            # Add assistant message to chat history - STORE THE ORIGINAL ANSWER
+            # This ensures image references are preserved for future processing
             st.session_state.messages.append({
                 "role": "assistant", 
-                "content": answer,
+                "content": answer,  # Store the original unprocessed answer
                 "sources": unique_sources
             })
