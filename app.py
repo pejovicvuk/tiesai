@@ -50,19 +50,36 @@ def get_conversation_history():
 
 # Function to process AI response and replace image references
 def process_response(response):
-    # Regular expression to find image references
+    # Regular expression to find standard image references
     image_pattern = r'\[IMAGE: (\d+) - (.*?)\]'
     
-    # Find all image references
+    # Find all standard image references
     image_refs = re.findall(image_pattern, response)
     
-    # Replace each image reference with an actual image
+    # Replace each standard image reference with an actual image
     for image_id, description in image_refs:
         image_base64 = get_image_base64(image_id)
-        # Create HTML for the image with the description as alt text
-        img_html = f'<img src="{image_base64}" alt="{description}" style="max-width: 100%; margin: 10px 0;">'
-        # Replace the reference with the actual image
-        response = response.replace(f'[IMAGE: {image_id} - {description}]', img_html)
+        if image_base64:
+            # Create HTML for the image with the description as alt text
+            img_html = f'<img src="{image_base64}" alt="{description}" style="max-width: 100%; margin: 10px 0;">'
+            # Replace the reference with the actual image
+            response = response.replace(f'[IMAGE: {image_id} - {description}]', img_html)
+    
+    # Additional pattern to catch complex image references with paths
+    complex_pattern = r'\[IMAGE: ([\d_]+.*?\.png)\]'
+    complex_refs = re.findall(complex_pattern, response)
+    
+    # Process complex image references
+    for complex_ref in complex_refs:
+        # Extract just the numeric ID from the complex reference
+        # This assumes the ID is the first number in the path
+        id_match = re.search(r'(\d+)', complex_ref)
+        if id_match:
+            image_id = id_match.group(1)
+            image_base64 = get_image_base64(image_id)
+            if image_base64:
+                img_html = f'<img src="{image_base64}" alt="Image {image_id}" style="max-width: 100%; margin: 10px 0;">'
+                response = response.replace(f'[IMAGE: {complex_ref}]', img_html)
     
     return response
 
