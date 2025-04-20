@@ -4,13 +4,12 @@ import base64
 from pymongo import MongoClient
 import gridfs
 from dotenv import load_dotenv
-import streamlit as st
 
 # Load environment variables
 load_dotenv()
 
 # Get MongoDB connection string from environment variable
-mongodb_uri = st.secrets["MONGODB_URI"]
+mongodb_uri = os.getenv("MONGODB_URI")
 if not mongodb_uri:
     print("Error: MongoDB URI not found. Please set the MONGODB_URI environment variable.")
     exit(1)

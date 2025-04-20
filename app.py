@@ -1,11 +1,15 @@
 import streamlit as st
 import os
 import re
+import certifi
 from dotenv import load_dotenv
 # Import functions from aiAssistant
 from aiAssistant import ask_question
 # Import image handler
 from image_handler import get_image_base64
+
+# Load environment variables
+load_dotenv()
 
 # Set page title and favicon
 st.set_page_config(
@@ -15,10 +19,22 @@ st.set_page_config(
 )
 
 # Get API key from environment variable
-openai_api_key = st.secrets["OPENAI_API_KEY"]
+openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     st.stop()
+
+# MongoDB connection error handling
+try:
+    # Initialize MongoDB connection here or in imported modules
+    # You might need to add this to your aiAssistant module
+    # Example: initialize_mongodb_connection()
+    pass
+except Exception as e:
+    st.error(f"Failed to connect to MongoDB: {str(e)}")
+    st.info("Please check your MongoDB connection string, network settings, and SSL configuration.")
+    # Continue execution with limited functionality or stop based on your requirements
+    # st.stop()  # Uncomment if you want to stop the app when MongoDB connection fails
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
