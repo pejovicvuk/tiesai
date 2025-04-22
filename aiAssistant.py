@@ -1,38 +1,20 @@
 import os
-import os.path
+import re
+import json
+import openai
 from dotenv import load_dotenv
-from langchain_community.document_loaders import JSONLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Get API key from environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    print("Error: OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
-    exit(1)
+# Set up OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Define metadata extraction function for v2 JSON
-def metadata_func(record: dict, metadata: dict) -> dict:
-    metadata["title"] = record.get("title", "")
-    metadata["article_id"] = record.get("id", "")  # Now using id directly
-    metadata["last_updated"] = record.get("last_updated", "")
-    
-    # Construct the proper Zendesk URL format
-    article_id = record.get("id", "")
-    title_slug = record.get("title", "").replace(" ", "-")
-    metadata["url"] = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}-{title_slug}"
-    
-    return metadata
-
-# Path to save/load the FAISS index
+# Define paths
 index_path = "./faiss_index"
 
 # Function to load or create the vector store
@@ -49,45 +31,182 @@ def get_vectorstore():
         print("Vector store loaded successfully")
     else:
         print("Creating new vector store...")
-        # 1. Load documents directly from your JSON file
-        loader = JSONLoader(
-            file_path="processed_zendesk_docs_v2.json",  # Updated to use v2 JSON
-            jq_schema='.documents[]',
-            content_key="markdown_content",  # This will be generated from the HTML content
-            metadata_func=metadata_func
-        )
-
-        documents = loader.load()
+        
+        # Load the JSON file
+        with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        documents = []
+        
+        # Process each document in the JSON
+        for doc in data.get("documents", []):
+            # Create a document with the content and metadata
+            content = ""
+            
+            # Extract content from structured_content if available
+            for section in doc.get("structured_content", []):
+                heading = section.get("heading", "")
+                if heading:
+                    content += f"# {heading}\n\n"
+                
+                # Add section content if available
+                for item in section.get("content", []):
+                    content += f"{item}\n\n"
+            
+            # If no structured content, use a simple title + id format
+            if not content:
+                content = f"# {doc.get('title', 'Untitled')}\n\n"
+            
+            # Add information about attachments (images)
+            if doc.get("attachments"):
+                content += "\n\n## Images\n\n"
+                for attachment in doc.get("attachments", []):
+                    attachment_id = attachment.get("id", "")
+                    if attachment_id:
+                        content += f"[IMAGE: {attachment_id} - Image from {doc.get('title', 'document')}]\n\n"
+                        content += f"Context: {attachment.get('context_before', '')} [IMAGE] {attachment.get('context_after', '')}\n\n"
+                        print(f"attachments found: {attachment_id}")
+            else:
+                print("No attachments found")
+            
+            # Create metadata
+            metadata = {
+                "title": doc.get("title", "Unknown"),
+                "article_id": doc.get("id", ""),
+                "last_updated": doc.get("last_updated", ""),
+                "url": doc.get("url", "")
+            }
+            
+            # Create document
+            document = Document(page_content=content, metadata=metadata)
+            documents.append(document)
+        
         print(f"Loaded {len(documents)} documents")
 
         # 2. Create a text splitter for chunking
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=4000,
             chunk_overlap=200,
-            separators=["\n## ", "\n### ", "\n#### ", "\n##### ", "\n", " ", ""]
+            separators=["\n\n", "\n", ". ", " ", ""]
         )
-
+        
         # 3. Split documents into chunks
         chunks = text_splitter.split_documents(documents)
-        print(f"Created {len(chunks)} chunks")
-
-        # 4. Create embeddings and store in vector database
+        print(f"Split into {len(chunks)} chunks")
+        
+        # 4. Create embeddings
         embeddings = OpenAIEmbeddings()
-        vectorstore = FAISS.from_documents(
-            documents=chunks,
-            embedding=embeddings
-        )
+        
+        # 5. Create vector store
+        vectorstore = FAISS.from_documents(chunks, embeddings)
+        print("Vector store created successfully")
+        
+        # 6. Save the vector store
         vectorstore.save_local(index_path)
-        print("Vector store created and persisted")
+        print(f"Vector store saved to {index_path}")
     
     return vectorstore
 
-# Function to query the system with conversation history
-def ask_question(question, conversation_history=""):
-    vectorstore = get_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+# Function to get image IDs for specific article IDs
+def get_image_ids_for_articles(article_ids):
+    image_ids = []
+    try:
+        with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        print(f"Looking for images in articles with IDs: {article_ids}")
+        
+        # Extract image IDs from articles that match the retrieved documents
+        for article in data.get("documents", []):
+            if article.get("id") in article_ids:
+                print(f"Found matching article: {article.get('id')} - {article.get('title')}")
+                if article.get("attachments"):
+                    print(f"Article has {len(article.get('attachments'))} attachments")
+                    for attachment in article.get("attachments", []):
+                        if attachment.get("id"):
+                            print(f"Adding image ID: {attachment.get('id')}")
+                            image_ids.append(attachment.get("id"))
+                else:
+                    print(f"Article {article.get('id')} has no attachments")
+    except Exception as e:
+        print(f"Error extracting image IDs from JSON: {e}")
     
-    template = """You are an assistant for TIES.Connect software documentation. Use the following pieces of context to answer the question at the end.
+    return image_ids
+
+# Function to ask a question and get a response
+def ask_question(question, chat_history=None, vectorstore=None):
+    if vectorstore is None:
+        vectorstore = get_vectorstore()
+    
+    # Create a retriever from the vector store
+    retriever = vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 5}
+    )
+    
+    # Get sources and images
+    docs = retriever.get_relevant_documents(question)
+    
+    # Extract source information with URLs for linking
+    sources = []
+    article_ids = []
+    for doc in docs:
+        # Debug: print the metadata to see what's available
+        print(f"Document metadata: {doc.metadata}")
+        
+        title = doc.metadata.get("title", "Unknown")
+        article_id = doc.metadata.get("article_id", "")
+        url = doc.metadata.get("url", "")
+        
+        if article_id:
+            article_ids.append(article_id)
+        
+        # Ensure we have a valid URL
+        if not url or not url.startswith("http"):
+            url = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}"
+        
+        sources.append({
+            "title": title,
+            "article_id": article_id,
+            "url": url
+        })
+    
+    # Get image IDs for the retrieved articles
+    image_ids = get_image_ids_for_articles(article_ids)
+    
+    # Remove duplicates while preserving order
+    unique_image_ids = []
+    for img_id in image_ids:
+        if img_id not in unique_image_ids:
+            unique_image_ids.append(img_id)
+    
+    print(f"Found {len(unique_image_ids)} unique image IDs: {unique_image_ids}")
+    
+    # Get unique sources by article_id
+    unique_sources = []
+    seen_ids = set()
+    for source in sources:
+        if source["article_id"] not in seen_ids and source["article_id"]:
+            seen_ids.add(source["article_id"])
+            unique_sources.append(source)
+    
+    # Create a prompt that includes image information
+    image_context = ""
+    if unique_image_ids:
+        image_context = "\n\nThe following images are available for reference:\n"
+        for i, img_id in enumerate(unique_image_ids[:10]):  # Limit to 10 images to avoid overwhelming the AI
+            image_context += f"[IMAGE: {img_id} - Relevant image {i+1}]\n"
+    
+    # Prepare the context from the retrieved documents
+    context = "\n\n".join([doc.page_content for doc in docs])
+    
+    # Create the system message with guidelines
+    system_message = f"""You are an AI assistant for TIES.Connect, a software platform. Answer the user's question based on the following context.
+
+    Context:
+    {context}
+    
+    {image_context}
     
     Guidelines:
     - ALWAYS maintain context from previous questions in the conversation.
@@ -115,6 +234,7 @@ def ask_question(question, conversation_history=""):
     - Example: [IMAGE: 33996955212813 - Term Supply Planning screen]
     - The image should appear immediately after the text that describes what the image shows.
     - NEVER say "image not available" - if you can't find a relevant image, simply don't mention images.
+    - Use the image IDs provided in the context when referencing images.
     
     IMPORTANT SOURCE GUIDELINES:
     - DO NOT include URLs or links in your main response text.
@@ -122,53 +242,39 @@ def ask_question(question, conversation_history=""):
     - You can mention article titles when relevant, but do not include the URLs.
     - The sources will be automatically displayed in the "Sources" section below your response.
     - When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
+    """
     
-    Previous conversation:
-    {conversation_history}
+    # Create the chat history for the conversation
+    messages = [{"role": "system", "content": system_message}]
     
-    Context:
-    {context}
+    # Add the chat history if provided
+    if chat_history:
+        # Ensure chat history is in the correct format
+        for message in chat_history:
+            if isinstance(message, dict) and "role" in message and "content" in message:
+                # Only include user and assistant messages, not system messages
+                if message["role"] in ["user", "assistant"]:
+                    messages.append(message)
+            else:
+                print(f"Warning: Skipping invalid message format in chat history: {message}")
     
-    Question: {question}
-    Answer:"""
-
-    prompt = PromptTemplate.from_template(template)
-    llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
+    # Add the user's question
+    messages.append({"role": "user", "content": question})
     
-    # Create the RAG chain
-    rag_chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt.partial(conversation_history=conversation_history)
-        | llm
-        | StrOutputParser()
+    # Debug: Print the messages being sent to the API
+    print(f"Sending {len(messages)} messages to the API")
+    for i, msg in enumerate(messages):
+        print(f"Message {i}: role={msg.get('role')}, content_length={len(msg.get('content', ''))}")
+    
+    # Get the response from the model
+    response = openai.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.7,
     )
     
-    # Get answer
-    answer = rag_chain.invoke(question)
+    # Extract the assistant's response
+    answer = response.choices[0].message.content
     
-    # Get sources and images
-    docs = retriever.get_relevant_documents(question)
-    
-    # Extract source information with URLs for linking
-    sources = []
-    for doc in docs:
-        title = doc.metadata.get("title", "Unknown")
-        article_id = doc.metadata.get("article_id", "")
-        url = doc.metadata.get("url", "")  # This now comes directly from the document
-        
-        sources.append({
-            "title": title,
-            "article_id": article_id,
-            "url": url
-        })
-    
-    # Get unique sources by article_id
-    unique_sources = []
-    seen_ids = set()
-    for source in sources:
-        if source["article_id"] not in seen_ids:
-            seen_ids.add(source["article_id"])
-            unique_sources.append(source)
-    
-    return answer, unique_sources
+    return answer, unique_sources, unique_image_ids
     
