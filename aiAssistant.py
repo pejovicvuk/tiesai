@@ -17,9 +17,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Define paths
 index_path = "./faiss_index"
 
-# Function to load or create the vector store
 def get_vectorstore():
-    # Check if the FAISS index already exists
     if os.path.exists(index_path):
         print("Loading existing vector store...")
         embeddings = OpenAIEmbeddings()
@@ -32,32 +30,25 @@ def get_vectorstore():
     else:
         print("Creating new vector store...")
         
-        # Load the JSON file
         with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         
         documents = []
         
-        # Process each document in the JSON
         for doc in data.get("documents", []):
-            # Create a document with the content and metadata
             content = ""
             
-            # Extract content from structured_content if available
             for section in doc.get("structured_content", []):
                 heading = section.get("heading", "")
                 if heading:
                     content += f"# {heading}\n\n"
                 
-                # Add section content if available
                 for item in section.get("content", []):
                     content += f"{item}\n\n"
             
-            # If no structured content, use a simple title + id format
             if not content:
                 content = f"# {doc.get('title', 'Untitled')}\n\n"
             
-            # Add information about attachments (images)
             if doc.get("attachments"):
                 content += "\n\n## Images\n\n"
                 for attachment in doc.get("attachments", []):
@@ -69,7 +60,6 @@ def get_vectorstore():
             else:
                 print("No attachments found")
             
-            # Create metadata
             metadata = {
                 "title": doc.get("title", "Unknown"),
                 "article_id": doc.get("id", ""),
@@ -77,37 +67,30 @@ def get_vectorstore():
                 "url": doc.get("url", "")
             }
             
-            # Create document
             document = Document(page_content=content, metadata=metadata)
             documents.append(document)
         
         print(f"Loaded {len(documents)} documents")
 
-        # 2. Create a text splitter for chunking
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=4000,
             chunk_overlap=200,
             separators=["\n\n", "\n", ". ", " ", ""]
         )
         
-        # 3. Split documents into chunks
         chunks = text_splitter.split_documents(documents)
         print(f"Split into {len(chunks)} chunks")
         
-        # 4. Create embeddings
         embeddings = OpenAIEmbeddings()
         
-        # 5. Create vector store
         vectorstore = FAISS.from_documents(chunks, embeddings)
         print("Vector store created successfully")
         
-        # 6. Save the vector store
         vectorstore.save_local(index_path)
         print(f"Vector store saved to {index_path}")
     
     return vectorstore
 
-# Function to get image IDs for specific article IDs
 def get_image_ids_for_articles(article_ids):
     image_ids = []
     try:
@@ -116,7 +99,6 @@ def get_image_ids_for_articles(article_ids):
         
         print(f"Looking for images in articles with IDs: {article_ids}")
         
-        # Extract image IDs from articles that match the retrieved documents
         for article in data.get("documents", []):
             if article.get("id") in article_ids:
                 print(f"Found matching article: {article.get('id')} - {article.get('title')}")
@@ -133,25 +115,20 @@ def get_image_ids_for_articles(article_ids):
     
     return image_ids
 
-# Function to ask a question and get a response
 def ask_question(question, chat_history=None, vectorstore=None):
     if vectorstore is None:
         vectorstore = get_vectorstore()
     
-    # Create a retriever from the vector store
     retriever = vectorstore.as_retriever(
         search_type="similarity",
         search_kwargs={"k": 5}
     )
     
-    # Get sources and images
     docs = retriever.get_relevant_documents(question)
     
-    # Extract source information with URLs for linking
     sources = []
     article_ids = []
     for doc in docs:
-        # Debug: print the metadata to see what's available
         print(f"Document metadata: {doc.metadata}")
         
         title = doc.metadata.get("title", "Unknown")
@@ -161,7 +138,6 @@ def ask_question(question, chat_history=None, vectorstore=None):
         if article_id:
             article_ids.append(article_id)
         
-        # Ensure we have a valid URL
         if not url or not url.startswith("http"):
             url = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}"
         
@@ -171,10 +147,8 @@ def ask_question(question, chat_history=None, vectorstore=None):
             "url": url
         })
     
-    # Get image IDs for the retrieved articles
     image_ids = get_image_ids_for_articles(article_ids)
     
-    # Remove duplicates while preserving order
     unique_image_ids = []
     for img_id in image_ids:
         if img_id not in unique_image_ids:
@@ -182,7 +156,6 @@ def ask_question(question, chat_history=None, vectorstore=None):
     
     print(f"Found {len(unique_image_ids)} unique image IDs: {unique_image_ids}")
     
-    # Get unique sources by article_id
     unique_sources = []
     seen_ids = set()
     for source in sources:
@@ -190,17 +163,14 @@ def ask_question(question, chat_history=None, vectorstore=None):
             seen_ids.add(source["article_id"])
             unique_sources.append(source)
     
-    # Create a prompt that includes image information
     image_context = ""
     if unique_image_ids:
         image_context = "\n\nThe following images are available for reference:\n"
         for i, img_id in enumerate(unique_image_ids[:10]):  # Limit to 10 images to avoid overwhelming the AI
             image_context += f"[IMAGE: {img_id} - Relevant image {i+1}]\n"
     
-    # Prepare the context from the retrieved documents
     context = "\n\n".join([doc.page_content for doc in docs])
     
-    # Create the system message with guidelines
     system_message = f"""You are an AI assistant for TIES.Connect, a software platform. Answer the user's question based on the following context.
 
     Context:
@@ -212,7 +182,6 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - ALWAYS maintain context from previous questions in the conversation.
     - If you don't immediately know the answer, look for related concepts in the context that might help.
     - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
-    - If you recognize keywords (like "book", "job", "order") but need clarification, ask specific follow-up questions.
     - Keep your answers concise and focused on the documentation provided.
     - Use bullet points or numbered lists for step-by-step instructions.
     - Format your response with markdown for better readability (headers, bold, lists).
@@ -244,36 +213,28 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
     """
     
-    # Create the chat history for the conversation
     messages = [{"role": "system", "content": system_message}]
     
-    # Add the chat history if provided
     if chat_history:
-        # Ensure chat history is in the correct format
         for message in chat_history:
             if isinstance(message, dict) and "role" in message and "content" in message:
-                # Only include user and assistant messages, not system messages
                 if message["role"] in ["user", "assistant"]:
                     messages.append(message)
             else:
                 print(f"Warning: Skipping invalid message format in chat history: {message}")
     
-    # Add the user's question
     messages.append({"role": "user", "content": question})
     
-    # Debug: Print the messages being sent to the API
     print(f"Sending {len(messages)} messages to the API")
     for i, msg in enumerate(messages):
         print(f"Message {i}: role={msg.get('role')}, content_length={len(msg.get('content', ''))}")
     
-    # Get the response from the model
     response = openai.chat.completions.create(
         model="gpt-4o",
         messages=messages,
         temperature=0.7,
     )
     
-    # Extract the assistant's response
     answer = response.choices[0].message.content
     
     return answer, unique_sources, unique_image_ids

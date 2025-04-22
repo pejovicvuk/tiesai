@@ -19,7 +19,7 @@ if 'conversation_history' not in st.session_state:
 if 'image_cache' not in st.session_state:
     st.session_state.image_cache = {}
 
-# Function to fetch image from Zendesk and convert to base64
+# Function to fetch image from Zendesk
 def get_image_base64(image_id):
     print(f"Attempting to fetch image with ID: {image_id}")
     
@@ -54,7 +54,6 @@ def get_image_base64(image_id):
     print(f"Fetching attachment information from {url}...")
     
     try:
-        # Get the attachment metadata
         response = requests.get(url, auth=auth)
         response.raise_for_status()
         
@@ -71,21 +70,16 @@ def get_image_base64(image_id):
         print(f"Found attachment: {attachment.get('name')} ({content_type})")
         print(f"Downloading from: {content_url}")
         
-        # Create a session with authentication
         session = requests.Session()
         session.auth = auth
         
-        # Download the actual image with authentication
         image_response = session.get(content_url)
         image_response.raise_for_status()
-        
-        # Convert image to base64
+
         encoded = base64.b64encode(image_response.content).decode()
         
-        # Create data URL
         data_url = f"data:{content_type};base64,{encoded}"
         
-        # Cache the image
         st.session_state.image_cache[image_id] = data_url
         print(f"Successfully fetched image {image_id}")
         
@@ -94,7 +88,6 @@ def get_image_base64(image_id):
     except requests.exceptions.HTTPError as e:
         print(f"HTTP Error fetching image {image_id}: {e}")
         
-        # Try alternative approach for restricted content
         if hasattr(e, 'response') and e.response.status_code == 403:
             print("Attempting alternative approach for restricted content...")
             return fetch_restricted_image(image_id, auth, zendesk_subdomain)
@@ -108,7 +101,6 @@ def get_image_base64(image_id):
 def fetch_restricted_image(image_id, auth, zendesk_subdomain):
     """Alternative approach for fetching restricted images"""
     
-    # Try direct API access to the attachment content
     url = f"https://{zendesk_subdomain}.zendesk.com/api/v2/help_center/articles/attachments/{image_id}/inline"
     
     print(f"Trying direct API access: {url}")
@@ -120,14 +112,11 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
         response = session.get(url)
         response.raise_for_status()
         
-        # Determine content type
         content_type = response.headers.get('Content-Type', 'image/png')
         
-        # Convert to base64
         encoded = base64.b64encode(response.content).decode()
         data_url = f"data:{content_type};base64,{encoded}"
         
-        # Cache the image
         st.session_state.image_cache[image_id] = data_url
         print(f"Successfully downloaded restricted image")
         return data_url
@@ -135,7 +124,6 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
     except requests.exceptions.HTTPError as e:
         print(f"Failed to fetch restricted image: {e}")
         
-        # One more attempt with a different endpoint
         try:
             url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
             print(f"Trying final approach: {url}")
@@ -147,14 +135,11 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
             response = requests.get(url, headers=headers)
             response.raise_for_status()
             
-            # Try to determine content type from headers
             content_type = response.headers.get('Content-Type', 'image/png')
             
-            # Convert to base64
             encoded = base64.b64encode(response.content).decode()
             data_url = f"data:{content_type};base64,{encoded}"
             
-            # Cache the image
             st.session_state.image_cache[image_id] = data_url
             print(f"Successfully downloaded restricted image with final approach")
             return data_url
@@ -171,7 +156,6 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
 
 # Function to process AI response and replace image references
 def process_response(response):
-    # Regular expression to find image references in the format [IMAGE: image_id - description]
     image_pattern = r'\[IMAGE: (\d+) - (.*?)\]'
     
     # Find all image references in the response
@@ -181,12 +165,9 @@ def process_response(response):
     # Replace each image reference with an HTML img tag
     processed_response = response
     for image_id, description in image_matches:
-        print(f"Processing image: {image_id} - {description}")
         
-        # Instead of using base64, let's use the direct URL
         zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
         image_url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
-        print(f"Using direct image URL: {image_url}")
         
         # Create HTML for the image with the description as alt text and caption
         image_html = f"""
@@ -234,7 +215,7 @@ def main():
             message_placeholder = st.empty()
             with st.spinner("Thinking..."):
                 # Get response from AI
-                answer, unique_sources, unique_image_ids = ask_question(prompt, st.session_state.conversation_history, vectorstore)
+                answer, unique_sources = ask_question(prompt, st.session_state.conversation_history, vectorstore)
                 
                 # Process the response to replace image references with actual images
                 processed_answer = process_response(answer)
