@@ -213,12 +213,20 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
             if unique_sources:
                 with st.expander("Sources"):
                     for source in unique_sources:
-                        title = source.get("title", "Unknown")
-                        url = source.get("url", "")
-                        if url:
-                            st.markdown(f"- [{title}]({url})")
+                        # Check if source is a dictionary (as expected)
+                        if isinstance(source, dict):
+                            title = source.get("title", "Unknown")
+                            url = source.get("url", "")
+                            if url:
+                                st.markdown(f"- [{title}]({url})")
+                            else:
+                                st.markdown(f"- {title}")
+                        # Handle case where source might be a string
+                        elif isinstance(source, str):
+                            st.markdown(f"- {source}")
+                        # Handle any other unexpected type
                         else:
-                            st.markdown(f"- {title}")
+                            st.markdown(f"- Unknown source: {type(source)}")
             
             # Add assistant message to chat history - STORE THE ORIGINAL ANSWER
             # This ensures image references are preserved for future processing
