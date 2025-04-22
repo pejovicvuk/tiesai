@@ -40,4 +40,8 @@ jsonExtraction.py
 mongoUpload.py
 mongoDeleteAll.py
 imageUpload.py
-api.py
+createAiJson.py
+
+
+# Ignore Zendesk documentation folder
+zendesk_docs_20250422_115533/

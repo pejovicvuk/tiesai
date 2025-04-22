@@ -1,12 +1,13 @@
 import streamlit as st
 import os
 import re
+import requests
+import base64
+from io import BytesIO
 import certifi
 from dotenv import load_dotenv
 # Import functions from aiAssistant
 from aiAssistant import ask_question
-# Import image handler
-from image_handler import get_image_base64
 
 # Load environment variables
 load_dotenv()
@@ -24,21 +25,17 @@ if not openai_api_key:
     st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     st.stop()
 
-# MongoDB connection error handling
-try:
-    # Initialize MongoDB connection here or in imported modules
-    # You might need to add this to your aiAssistant module
-    # Example: initialize_mongodb_connection()
-    pass
-except Exception as e:
-    st.error(f"Failed to connect to MongoDB: {str(e)}")
-    st.info("Please check your MongoDB connection string, network settings, and SSL configuration.")
-    # Continue execution with limited functionality or stop based on your requirements
-    # st.stop()  # Uncomment if you want to stop the app when MongoDB connection fails
+zendesk_api_token = os.getenv("ZENDESK_API_TOKEN")
+zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
+
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Initialize session state for image cache
+if "image_cache" not in st.session_state:
+    st.session_state.image_cache = {}
 
 # Function to get conversation history as text
 def get_conversation_history():
@@ -47,6 +44,91 @@ def get_conversation_history():
         role = "User" if msg["role"] == "user" else "Assistant"
         history += f"{role}: {msg['content']}\n\n"
     return history
+
+# Function to fetch image from Zendesk and convert to base64
+def get_image_base64(image_id):
+    # Check if image is already in cache
+    if image_id in st.session_state.image_cache:
+        return st.session_state.image_cache[image_id]
+    
+    try:
+        # Configuration
+        zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
+        zendesk_user = os.getenv("ZENDESK_EMAIL", "TIESConnectHelpCenterBot@trilogyes.com")
+        encoded_token = os.getenv("ZENDESK_API_TOKEN")
+        
+        # Decode the token if needed
+        if encoded_token and encoded_token.endswith('=='):
+            try:
+                api_token = base64.b64decode(encoded_token).decode('utf-8')
+            except Exception as e:
+                print(f"Error decoding token: {e}")
+                api_token = encoded_token
+        else:
+            api_token = encoded_token
+        
+        # Set up authentication
+        auth = (f"{zendesk_user}/token", api_token)
+        
+        # Try direct access to the attachment first (this might work for public attachments)
+        direct_url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
+        direct_response = requests.get(direct_url)
+        
+        if direct_response.status_code == 200:
+            # If direct access works, use that
+            content_type = direct_response.headers.get('Content-Type', 'image/png')
+            encoded = base64.b64encode(direct_response.content).decode()
+            data_url = f"data:{content_type};base64,{encoded}"
+            st.session_state.image_cache[image_id] = data_url
+            return data_url
+        
+        # If direct access fails, try the API approach
+        # First, get the attachment metadata
+        metadata_url = f"https://{zendesk_subdomain}.zendesk.com/api/v2/help_center/articles/attachments/{image_id}.json"
+        
+        # Get the attachment metadata
+        metadata_response = requests.get(metadata_url, auth=auth)
+        metadata_response.raise_for_status()
+        
+        attachment_data = metadata_response.json()
+        attachment = attachment_data.get('article_attachment', {})
+        
+        # Get the content URL from the attachment data
+        content_url = attachment.get('content_url')
+        if not content_url:
+            print(f"No content URL found for attachment {image_id}")
+            return None
+        
+        # Get the content type
+        content_type = attachment.get('content_type', 'image/png')
+        
+        # Download the actual image with authentication
+        image_response = requests.get(content_url, auth=auth)
+        image_response.raise_for_status()
+        
+        # Convert image to base64
+        encoded = base64.b64encode(image_response.content).decode()
+        
+        # Create data URL
+        data_url = f"data:{content_type};base64,{encoded}"
+        
+        # Cache the image
+        st.session_state.image_cache[image_id] = data_url
+        
+        return data_url
+        
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error fetching image {image_id}: {e}")
+        if hasattr(e, 'response'):
+            if e.response.status_code == 404:
+                print(f"Attachment with ID {image_id} not found.")
+            elif e.response.status_code == 401 or e.response.status_code == 403:
+                print(f"Authentication failed or access forbidden. Status code: {e.response.status_code}")
+                print(f"Response: {e.response.text[:200]}...")  # Print first 200 chars of response
+        return None
+    except Exception as e:
+        print(f"Error fetching image {image_id}: {str(e)}")
+        return None
 
 # Function to process AI response and replace image references
 def process_response(response):
@@ -95,7 +177,13 @@ for message in st.session_state.messages:
         # Display sources if available
         if "sources" in message and message["sources"]:
             with st.expander("Sources"):
-                st.markdown("\n".join([f"- {source}" for source in message["sources"]]))
+                for source in message["sources"]:
+                    title = source.get("title", "Unknown")
+                    url = source.get("url", "")
+                    if url:
+                        st.markdown(f"- [{title}]({url})")
+                    else:
+                        st.markdown(f"- {title}")
 
 # Get user input
 if prompt := st.chat_input("Ask a question about TIES.Connect"):
@@ -124,7 +212,13 @@ if prompt := st.chat_input("Ask a question about TIES.Connect"):
             # Display sources
             if unique_sources:
                 with st.expander("Sources"):
-                    st.markdown("\n".join([f"- {source}" for source in unique_sources]))
+                    for source in unique_sources:
+                        title = source.get("title", "Unknown")
+                        url = source.get("url", "")
+                        if url:
+                            st.markdown(f"- [{title}]({url})")
+                        else:
+                            st.markdown(f"- {title}")
             
             # Add assistant message to chat history - STORE THE ORIGINAL ANSWER
             # This ensures image references are preserved for future processing

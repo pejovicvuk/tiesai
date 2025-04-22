@@ -19,11 +19,13 @@ if not openai_api_key:
     print("Error: OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
     exit(1)
 
-# Define metadata extraction function
+# Define metadata extraction function for v2 JSON
 def metadata_func(record: dict, metadata: dict) -> dict:
     metadata["title"] = record.get("title", "")
-    metadata["article_id"] = record.get("article_id", "")
+    metadata["article_id"] = record.get("id", "")  # Now using id directly
     metadata["last_updated"] = record.get("last_updated", "")
+    # Use the URL directly from the document
+    metadata["url"] = record.get("url", "")
     return metadata
 
 # Path to save/load the FAISS index
@@ -45,9 +47,9 @@ def get_vectorstore():
         print("Creating new vector store...")
         # 1. Load documents directly from your JSON file
         loader = JSONLoader(
-            file_path="zendesk documentation/processed_zendesk_docs_enhanced.json",
+            file_path="processed_zendesk_docs_v2.json",  # Updated to use v2 JSON
             jq_schema='.documents[]',
-            content_key="markdown_content",
+            content_key="markdown_content",  # This will be generated from the HTML content
             metadata_func=metadata_func
         )
 
@@ -77,7 +79,6 @@ def get_vectorstore():
     return vectorstore
 
 # Function to query the system with conversation history
-# Function to query the system with conversation history
 def ask_question(question, conversation_history=""):
     vectorstore = get_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
@@ -89,8 +90,6 @@ def ask_question(question, conversation_history=""):
     - If you don't immediately know the answer, look for related concepts in the context that might help.
     - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
     - If you recognize keywords (like "book", "job", "order") but need clarification, ask specific follow-up questions.
-    - NEVER refer users to external documentation, guides, or articles. This is critical - do not tell users to "refer to", "see", or "check" any documentation.
-    - Instead of referring to documentation, always provide complete answers directly in your response.
     - Keep your answers concise and focused on the documentation provided.
     - Use bullet points or numbered lists for step-by-step instructions.
     - Format your response with markdown for better readability (headers, bold, lists).
@@ -108,8 +107,17 @@ def ask_question(question, conversation_history=""):
     - Insert image references at the appropriate point in your text, not just at the end of your response.
     - If a section has multiple images, include ALL of them at their correct positions in your text.
     - Use this format for image references: [IMAGE: image_id - brief description]
-    - Example: [IMAGE: 33996955310861 - Term Supply Planning screen]
+    - Example: [IMAGE: 33996955212813 - Term Supply Planning screen]
     - The image should appear immediately after the text that describes what the image shows.
+    - NEVER say "image not available" - if you can't find a relevant image, simply don't mention images.
+    
+    IMPORTANT SOURCE GUIDELINES:
+    - When users ask for links, sources, or documentation, DO provide them with the relevant article titles and links.
+    - You CAN and SHOULD share links to TIES documentation when explicitly requested.
+    - If asked "where can I find more information" or similar questions, provide the relevant source articles.
+    - Do not say you're "unable to provide direct links" - you have access to the documentation sources.
+    - While you shouldn't refer users to documentation instead of answering their question, you SHOULD provide source links when directly asked.
+    - The sources will be automatically displayed in the "Sources" section, but you should also mention relevant article titles in your response when asked.
     
     Previous conversation:
     {conversation_history}
@@ -136,8 +144,27 @@ def ask_question(question, conversation_history=""):
     
     # Get sources and images
     docs = retriever.get_relevant_documents(question)
-    sources = [doc.metadata.get("title", "Unknown") for doc in docs]
-    unique_sources = list(set(sources))
+    
+    # Extract source information with URLs for linking
+    sources = []
+    for doc in docs:
+        title = doc.metadata.get("title", "Unknown")
+        article_id = doc.metadata.get("article_id", "")
+        url = doc.metadata.get("url", "")  # This now comes directly from the document
+        
+        sources.append({
+            "title": title,
+            "article_id": article_id,
+            "url": url
+        })
+    
+    # Get unique sources by article_id
+    unique_sources = []
+    seen_ids = set()
+    for source in sources:
+        if source["article_id"] not in seen_ids:
+            seen_ids.add(source["article_id"])
+            unique_sources.append(source)
     
     return answer, unique_sources
     
