@@ -25,14 +25,10 @@ def metadata_func(record: dict, metadata: dict) -> dict:
     metadata["article_id"] = record.get("id", "")  # Now using id directly
     metadata["last_updated"] = record.get("last_updated", "")
     
-    # Use the URL directly from the document if available, otherwise construct it
-    if record.get("url"):
-        metadata["url"] = record.get("url")
-    else:
-        # Construct the proper Zendesk URL format
-        article_id = record.get("id", "")
-        title_slug = record.get("title", "").replace(" ", "-")
-        metadata["url"] = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}-{title_slug}"
+    # Construct the proper Zendesk URL format
+    article_id = record.get("id", "")
+    title_slug = record.get("title", "").replace(" ", "-")
+    metadata["url"] = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}-{title_slug}"
     
     return metadata
 
@@ -109,6 +105,7 @@ def ask_question(question, conversation_history=""):
     - When appropriate, include examples to illustrate concepts.
     - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
     - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
+    - DO NOT include URLs or links in your main response - the sources will be automatically displayed in a separate section.
     
     IMPORTANT IMAGE GUIDELINES:
     - When discussing a feature that has an associated image, place an image reference EXACTLY where it belongs in your response.
@@ -120,12 +117,11 @@ def ask_question(question, conversation_history=""):
     - NEVER say "image not available" - if you can't find a relevant image, simply don't mention images.
     
     IMPORTANT SOURCE GUIDELINES:
-    - When users ask for links, sources, or documentation, DO provide them with the relevant article titles and links.
-    - You CAN and SHOULD share links to TIES documentation when explicitly requested.
-    - If asked "where can I find more information" or similar questions, provide the relevant source articles.
-    - Do not say you're "unable to provide direct links" - you have access to the documentation sources.
-    - While you shouldn't refer users to documentation instead of answering their question, you SHOULD provide source links when directly asked.
-    - The sources will be automatically displayed in the "Sources" section, but you should also mention relevant article titles in your response when asked.
+    - DO NOT include URLs or links in your main response text.
+    - If users ask for sources or where to find information, tell them to check the Sources section below your answer.
+    - You can mention article titles when relevant, but do not include the URLs.
+    - The sources will be automatically displayed in the "Sources" section below your response.
+    - When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
     
     Previous conversation:
     {conversation_history}
