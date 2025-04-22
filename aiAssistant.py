@@ -24,8 +24,16 @@ def metadata_func(record: dict, metadata: dict) -> dict:
     metadata["title"] = record.get("title", "")
     metadata["article_id"] = record.get("id", "")  # Now using id directly
     metadata["last_updated"] = record.get("last_updated", "")
-    # Use the URL directly from the document
-    metadata["url"] = record.get("url", "")
+    
+    # Use the URL directly from the document if available, otherwise construct it
+    if record.get("url"):
+        metadata["url"] = record.get("url")
+    else:
+        # Construct the proper Zendesk URL format
+        article_id = record.get("id", "")
+        title_slug = record.get("title", "").replace(" ", "-")
+        metadata["url"] = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}-{title_slug}"
+    
     return metadata
 
 # Path to save/load the FAISS index
