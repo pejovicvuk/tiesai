@@ -156,7 +156,7 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
 
 # Function to process AI response and replace image references
 def process_response(response):
-    image_pattern = r'\[IMAGE: (\d+) - (.*?)\]'
+    image_pattern = r'\[IMAGE: (\d+)\]'
     
     # Find all image references in the response
     image_matches = re.findall(image_pattern, response)

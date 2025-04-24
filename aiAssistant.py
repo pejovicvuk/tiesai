@@ -1,4 +1,5 @@
 import os
+#import shutil
 import json
 import openai
 from dotenv import load_dotenv
@@ -15,6 +16,10 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Define paths
 index_path = "./faiss_index"
+
+#if os.path.exists(index_path):
+#    shutil.rmtree(index_path)
+#    print(f"Deleted existing vector store at {index_path}")
 
 def get_vectorstore():
     # Define the embedding model consistently
@@ -72,7 +77,7 @@ def get_vectorstore():
                 for attachment in doc.get("attachments", []):
                     attachment_id = attachment.get("id", "")
                     if attachment_id:
-                        content += f"[IMAGE: {attachment_id} - Image from {doc.get('title', 'document')}]\n\n"
+                        content += f"[IMAGE: {attachment_id}]\n\n"
                         content += f"Context: {attachment.get('context_before', '')} [IMAGE] {attachment.get('context_after', '')}\n\n"
             
             metadata = {
@@ -194,8 +199,8 @@ def ask_question(question, chat_history=None, vectorstore=None):
     image_context = ""
     if unique_attachment_ids:
         image_context = "\n\nThe following images are available for reference:\n"
-        for i, attachment_id in enumerate(unique_attachment_ids[:10]):  # Limit to 10 images
-            image_context += f"[IMAGE: {attachment_id} - Relevant image {i+1}]\n"
+        for attachment_id in unique_attachment_ids[:10]:  # Limit to 10 images
+            image_context += f"[IMAGE: {attachment_id}]\n"
     
     context = "\n\n".join([doc.page_content for doc in docs])
     
@@ -254,9 +259,23 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
 
     IMPORTANT DOMAIN KNOWLEDGE:
-    - The pipeline is a type of facility.
-    - There are several types of facilities (gathering, pipeline, processing plant, ISO, Storage, producer field, refinery).
-    - Meter is a type of Station
+    - Facility Types: TIES recognizes several types of facilities including gathering, pipeline, processing plant, ISO, storage, producer field, and refinery
+    - Pipelines are classified as a type of facility in the TIES system
+    - Station Types: Meters, pools, and hubs are all types of stations
+    - Every facility is associated with a Business Associate as its operator
+    - Stations represent points on a facility and include meters, pools, hubs, and interconnects
+    - Each station belongs to a facility and has a location code, meter number (DRN), and type (e.g., receipt, delivery)
+    - Business Associates are used for all counterparties, operators, pipelines, and trading partners
+    - TIES separates workflows between Operator Scenarios (pipeline, plant, scheduling) and Trading Scenarios (deal capture, MtM, credit, position, risk)
+    - A Book is a financial container for organizing transactions by purpose, strategy, or region
+    - Physical trades and Financial trades have different properties and cannot be both simultaneously
+    - Basis Points link stations or locations to reference prices used for risk reporting and valuation
+
+    Guidance on Domain Knowledge
+    - When you see content from documents marked as "domain_knowledge", use this to inform your understanding of relationships and concepts
+    - Do not directly quote from domain knowledge documents in your answers
+    - Use domain knowledge to verify your understanding of TIES concepts before providing answers
+    - Domain knowledge documents provide context for how different parts of TIES relate to each other
     """
     
     messages = [{"role": "system", "content": system_message}]
