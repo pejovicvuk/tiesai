@@ -215,13 +215,13 @@ def main():
             message_placeholder = st.empty()
             with st.spinner("Thinking..."):
                 # Get response from AI
-                answer, unique_sources = ask_question(prompt, st.session_state.conversation_history, vectorstore)
+                answer, unique_sources, unique_attachment_ids = ask_question(prompt, st.session_state.conversation_history, vectorstore)
                 
                 # Process the response to replace image references with actual images
                 processed_answer = process_response(answer)
                 
-                # Add assistant message to chat history (store the original answer, not the processed one)
-                st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+                # Add assistant message to chat history
+                st.session_state.conversation_history.append({"role": "assistant", "content": processed_answer})
                 
                 # Display the processed answer
                 message_placeholder.write(processed_answer, unsafe_allow_html=True)
