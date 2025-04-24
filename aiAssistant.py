@@ -271,11 +271,18 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - Physical trades and Financial trades have different properties and cannot be both simultaneously
     - Basis Points link stations or locations to reference prices used for risk reporting and valuation
 
-    Guidance on Domain Knowledge
+    GUIDANCE ON DOMAIN KNOWLEDGE:
     - When you see content from documents marked as "domain_knowledge", use this to inform your understanding of relationships and concepts
     - Do not directly quote from domain knowledge documents in your answers
     - Use domain knowledge to verify your understanding of TIES concepts before providing answers
     - Domain knowledge documents provide context for how different parts of TIES relate to each other
+
+    HANDLING UNANSWERABLE QUESTIONS:
+    - If you cannot find specific information about a user's question in the provided context, do not make up information
+    - Instead, acknowledge the limitation by saying: "I don't have detailed information about [specific topic] in my knowledge base"
+    - Then offer related information: "However, I can provide information on related topics such as [list 2-3 related topics from the context]"
+    - Always provide an option to contact support: "Would you like me to share what I know about these related topics, or would you prefer to contact our support team for specific assistance?"
+    - If the user chooses support, provide: "You can reach our support team by submitting a ticket through the TIES support portal or by emailing support@trilogyenergysolutions.com"
     """
     
     messages = [{"role": "system", "content": system_message}]
