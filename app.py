@@ -164,7 +164,7 @@ def process_response(response):
     
     # Replace each image reference with an HTML img tag
     processed_response = response
-    for image_id, description in image_matches:
+    for image_id in image_matches:
         
         zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
         image_url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
@@ -172,12 +172,12 @@ def process_response(response):
         # Create HTML for the image with the description as alt text and caption
         image_html = f"""
         <div style="text-align: center; margin: 20px 0;">
-            <img src="{image_url}" alt="{description}" style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <img src="{image_url}" style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
         </div>
         """
         
         # Replace the image reference with the HTML
-        processed_response = processed_response.replace(f'[IMAGE: {image_id} - {description}]', image_html)
+        processed_response = processed_response.replace(f'[IMAGE: {image_id}]', image_html)
         print(f"Successfully replaced image reference for {image_id}")
     
     return processed_response
