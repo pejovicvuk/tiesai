@@ -10,7 +10,7 @@ from aiAssistant import ask_question, get_vectorstore
 st.set_page_config(
     page_title="TIES.Connect Help Center Assistant",
     page_icon="🤖",
-    layout="wide"
+    layout="wide" 
 )
 
 # Initialize session state variables if they don't exist
