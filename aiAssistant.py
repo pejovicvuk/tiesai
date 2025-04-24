@@ -23,50 +23,22 @@ def get_vectorstore():
         dimensions=3072
     )
     
-    # Check if we're on Streamlit Cloud
-    is_streamlit_cloud = os.environ.get('STREAMLIT_SHARING_MODE') == 'streamlit'
-    
-    # Path to the index
-    index_path = "faiss_index"
-    
-    # Force rebuild on Streamlit Cloud for first run
-    force_rebuild = is_streamlit_cloud and not os.path.exists("vector_store_built_flag")
-    
-    if os.path.exists(index_path) and not force_rebuild:
+    if os.path.exists(index_path):
         try:
             print("Loading existing vector store...")
             vectorstore = FAISS.load_local(
                 index_path, 
-                embeddings,
+                embeddings,  # Use the same embedding model definition
                 allow_dangerous_deserialization=True
             )
             print("Vector store loaded successfully")
-            
-            # Test the vector store with a simple query
-            try:
-                test_query = "test query"
-                test_docs = vectorstore.similarity_search(test_query, k=1)
-                print("Vector store verified with test query")
-                
-                # Create a flag file to indicate successful build
-                if is_streamlit_cloud:
-                    with open("vector_store_built_flag", "w") as f:
-                        f.write("Vector store built successfully")
-                
-                return vectorstore
-            except Exception as e:
-                print(f"Error testing vector store: {e}")
-                print("Rebuilding vector store due to test failure...")
-                # Fall through to rebuild
+            return vectorstore
         except Exception as e:
             print(f"Error loading vector store: {e}")
-            print("Rebuilding vector store...")
+            print("Rebuilding vector store due to embedding model change...")
             # Fall through to rebuild
     else:
-        if force_rebuild:
-            print("Forcing rebuild of vector store on Streamlit Cloud...")
-        else:
-            print("Vector store not found. Creating new vector store...")
+        print("Creating new vector store...")
     
     with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -144,11 +116,6 @@ def get_vectorstore():
     
     vectorstore.save_local(index_path)
     print(f"Vector store saved to {index_path}")
-    
-    # Create a flag file to indicate successful build
-    if is_streamlit_cloud:
-        with open("vector_store_built_flag", "w") as f:
-            f.write("Vector store built successfully")
     
     return vectorstore
 

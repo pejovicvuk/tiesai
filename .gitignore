@@ -41,10 +41,8 @@ mongoUpload.py
 mongoDeleteAll.py
 imageUpload.py
 createAiJson.py
+zendeskApi.py
 
 
 # Ignore Zendesk documentation folder
 zendesk_docs_20250422_115533/
-
-# Ignore FAISS index
-faiss_index/
