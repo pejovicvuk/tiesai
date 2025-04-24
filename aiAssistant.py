@@ -1,4 +1,5 @@
 import os
+import shutil
 import re
 import json
 import openai
@@ -20,7 +21,10 @@ index_path = "./faiss_index"
 def get_vectorstore():
     if os.path.exists(index_path):
         print("Loading existing vector store...")
-        embeddings = OpenAIEmbeddings()
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large",
+            dimensions = 3072
+        )
         vectorstore = FAISS.load_local(
             index_path, 
             embeddings, 
