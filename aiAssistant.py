@@ -276,8 +276,14 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - Do not directly quote from domain knowledge documents in your answers
     - Use domain knowledge to verify your understanding of TIES concepts before providing answers
     - Domain knowledge documents provide context for how different parts of TIES relate to each other
-
+    
     HANDLING UNANSWERABLE QUESTIONS:
+    - Consider a question unanswerable if:
+    - The retrieved documents don't mention the specific topic or process being asked about
+    - The documents mention the topic but don't provide clear instructions or details
+    - The retrieved information is tangential or only vaguely related to the query
+    - Before stating you don't have information, check if the question might be using terminology different from the documentation (e.g., "master storage deal" vs "primary storage transaction")
+    - If the documents provide partial information, acknowledge this limitation while still sharing what's available
     - If you cannot find specific information about a user's question in the provided context, do not make up information
     - Instead, acknowledge the limitation by saying: "I don't have detailed information about [specific topic] in my knowledge base"
     - Then offer related information: "However, I can provide information on related topics such as [list 2-3 related topics from the context]"
