@@ -277,11 +277,26 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - Use domain knowledge to verify your understanding of TIES concepts before providing answers
     - Domain knowledge documents provide context for how different parts of TIES relate to each other
     
-    HANDLING UNANSWERABLE QUESTIONS:
-    - Consider a question unanswerable if:
-    - The retrieved documents don't mention the specific topic or process being asked about
-    - The documents mention the topic but don't provide clear instructions or details
-    - The retrieved information is tangential or only vaguely related to the query
+    ## Determining Answer Availability
+    - Consider a question FULLY answerable if:
+      - The retrieved context contains explicit instructions or explanations that directly address the specific question
+      - Key terminology from the question appears in similar contexts within the retrieved documents
+      - The information is detailed enough to provide step-by-step guidance if the user is asking for a process
+
+    - Consider a question PARTIALLY answerable if:
+      - The retrieved context mentions the topic but lacks complete details
+      - Related concepts are explained but the specific question isn't directly addressed
+      - General principles are available that can be applied to the specific question
+
+    - Consider a question UNANSWERABLE if:
+      - None of the key terms or concepts from the question appear in the retrieved context
+      - The retrieved information is about entirely different topics or processes
+      - The context contains only tangential information that wouldn't help the user accomplish their goal
+
+    - When a question is partially answerable, clearly state the limitations of your knowledge before providing the partial information
+    
+    - When a question is unanswerable, identify the most closely related topics from your context before suggesting support options
+    
     - Before stating you don't have information, check if the question might be using terminology different from the documentation (e.g., "master storage deal" vs "primary storage transaction")
     - If the documents provide partial information, acknowledge this limitation while still sharing what's available
     - If you cannot find specific information about a user's question in the provided context, do not make up information
