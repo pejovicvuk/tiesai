@@ -19,16 +19,18 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Define paths
 index_path = "./faiss_index"
 
+embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-large",
+        dimensions=3072
+    )
 #if os.path.exists(index_path):
 #    shutil.rmtree(index_path)
 #    print(f"Deleted existing vector store at {index_path}")
 
 def get_vectorstore():
-    # Force rebuild the index if there's an error
-    rebuild_index = False
     
     # Check if the FAISS index already exists
-    if os.path.exists(index_path) and not rebuild_index:
+    if os.path.exists(index_path):
         try:
             print("Loading existing vector store...")
             embeddings = OpenAIEmbeddings()
@@ -46,16 +48,12 @@ def get_vectorstore():
             except Exception as e:
                 print(f"Error testing vector store: {e}")
                 print("Rebuilding index...")
-                rebuild_index = True
                 
         except Exception as e:
             print(f"Error loading vector store: {e}")
             print("Rebuilding index...")
-            rebuild_index = True
-    else:
-        rebuild_index = True
     
-    if rebuild_index:
+    else:
         print("Creating new vector store...")
         
         # Remove the old index if it exists
@@ -353,7 +351,7 @@ HANDLING UNANSWERABLE QUESTIONS:
     
     # Get the response from the model
     response = openai.chat.completions.create(
-        model="gpt-4o",
+        model="ft:gpt-4.1-2025-04-14:bridgeiq:trilogyai:BQiiHK25",
         messages=messages,
         temperature=0.7,
     )
