@@ -1,5 +1,5 @@
 import os
-#import shutil
+import shutil
 import json
 import openai
 from dotenv import load_dotenv
@@ -17,9 +17,9 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Define paths
 index_path = "./faiss_index"
 
-#if os.path.exists(index_path):
-#    shutil.rmtree(index_path)
-#    print(f"Deleted existing vector store at {index_path}")
+if os.path.exists(index_path):
+    shutil.rmtree(index_path)
+    print(f"Deleted existing vector store at {index_path}")
 
 def get_vectorstore():
     # Define the embedding model consistently
@@ -258,45 +258,11 @@ def ask_question(question, chat_history=None, vectorstore=None):
     - The sources will be automatically displayed in the "Sources" section below your response.
     - When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
 
-    IMPORTANT DOMAIN KNOWLEDGE:
-    - Facility Types: TIES recognizes several types of facilities including gathering, pipeline, processing plant, ISO, storage, producer field, and refinery
-    - Pipelines are classified as a type of facility in the TIES system
-    - Station Types: Meters, pools, and hubs are all types of stations
-    - Every facility is associated with a Business Associate as its operator
-    - Stations represent points on a facility and include meters, pools, hubs, and interconnects
-    - Each station belongs to a facility and has a location code, meter number (DRN), and type (e.g., receipt, delivery)
-    - Business Associates are used for all counterparties, operators, pipelines, and trading partners
-    - TIES separates workflows between Operator Scenarios (pipeline, plant, scheduling) and Trading Scenarios (deal capture, MtM, credit, position, risk)
-    - A Book is a financial container for organizing transactions by purpose, strategy, or region
-    - Physical trades and Financial trades have different properties and cannot be both simultaneously
-    - Basis Points link stations or locations to reference prices used for risk reporting and valuation
-
-    GUIDANCE ON DOMAIN KNOWLEDGE:
-    - When you see content from documents marked as "domain_knowledge", use this to inform your understanding of relationships and concepts
-    - Do not directly quote from domain knowledge documents in your answers
-    - Use domain knowledge to verify your understanding of TIES concepts before providing answers
-    - Domain knowledge documents provide context for how different parts of TIES relate to each other
-    
-    ## Determining Answer Availability
-    - Consider a question FULLY answerable if:
-      - The retrieved context contains explicit instructions or explanations that directly address the specific question
-      - Key terminology from the question appears in similar contexts within the retrieved documents
-      - The information is detailed enough to provide step-by-step guidance if the user is asking for a process
-
-    - Consider a question PARTIALLY answerable if:
-      - The retrieved context mentions the topic but lacks complete details
-      - Related concepts are explained but the specific question isn't directly addressed
-      - General principles are available that can be applied to the specific question
-
-    - Consider a question UNANSWERABLE if:
-      - None of the key terms or concepts from the question appear in the retrieved context
-      - The retrieved information is about entirely different topics or processes
-      - The context contains only tangential information that wouldn't help the user accomplish their goal
-
-    - When a question is partially answerable, clearly state the limitations of your knowledge before providing the partial information
-    
-    - When a question is unanswerable, identify the most closely related topics from your context before suggesting support options
-    
+    HANDLING UNANSWERABLE QUESTIONS:
+    - Consider a question unanswerable if:
+    - The retrieved documents don't mention the specific topic or process being asked about
+    - The documents mention the topic but don't provide clear instructions or details
+    - The retrieved information is tangential or only vaguely related to the query
     - Before stating you don't have information, check if the question might be using terminology different from the documentation (e.g., "master storage deal" vs "primary storage transaction")
     - If the documents provide partial information, acknowledge this limitation while still sharing what's available
     - If you cannot find specific information about a user's question in the provided context, do not make up information
@@ -323,7 +289,7 @@ def ask_question(question, chat_history=None, vectorstore=None):
         print(f"Message {i}: role={msg.get('role')}, content_length={len(msg.get('content', ''))}")
     
     response = openai.chat.completions.create(
-        model="gpt-4o",
+        model="ft:gpt-4.1-2025-04-14:bridgeiq:trilogyai:BQiiHK25",
         messages=messages,
         temperature=0.7,
     )
