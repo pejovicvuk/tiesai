@@ -308,17 +308,6 @@ Guidelines:
 - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
 - DO NOT include URLs or links in your main response - the sources will be automatically displayed in a separate section.
 
-IMPORTANT IMAGE GUIDELINES:
-- When discussing a feature that has an associated image, place an image reference EXACTLY where it belongs in your response.
-- Insert image references at the appropriate point in your text, not just at the end of your response.
-- LIMIT your response to a MAXIMUM of 3 images total - choose the most relevant ones.
-- Use this format for image references: ![Image](IMAGE_ID:image_id)
-- Example: ![Image](IMAGE_ID:33996955212813)
-- The image should appear immediately after the text that describes what the image shows.
-- NEVER say "image not available" - if you can't find a relevant image, simply don't mention images.
-- Use the image IDs provided in the context when referencing images.
-- DO NOT include duplicate images - if an image appears multiple times in the source, only include it once in your response.
-
 SOURCE GUIDELINES:
 - DO NOT include URLs or links in your main response text.
 - If users ask for sources or where to find information, tell them to check the Sources section below your answer.
@@ -372,5 +361,5 @@ HANDLING UNANSWERABLE QUESTIONS:
     # Extract the assistant's response
     answer = response.choices[0].message.content
     
-    return answer, unique_sources, unique_attachment_ids
+    return answer, unique_sources, []
     
