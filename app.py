@@ -8,16 +8,20 @@ from aiAssistant import ask_question, get_vectorstore
 
 # Set page configuration
 st.set_page_config(
-    page_title="TIES.Connect Help Center Assistant",
+    page_title="TIES AI Assistant",
     page_icon="🤖",
-    layout="wide" 
+    layout="wide"
 )
 
-# Initialize session state variables if they don't exist
-if 'conversation_history' not in st.session_state:
+# Initialize session state for conversation history
+if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
-if 'image_cache' not in st.session_state:
-    st.session_state.image_cache = {}
+
+if "sources" not in st.session_state:
+    st.session_state.sources = []
+
+if "attachment_ids" not in st.session_state:
+    st.session_state.attachment_ids = []
 
 # Function to fetch image from Zendesk
 def get_image_base64(image_id):
@@ -54,6 +58,7 @@ def get_image_base64(image_id):
     print(f"Fetching attachment information from {url}...")
     
     try:
+        # Get the attachment metadata
         response = requests.get(url, auth=auth)
         response.raise_for_status()
         
@@ -70,16 +75,21 @@ def get_image_base64(image_id):
         print(f"Found attachment: {attachment.get('name')} ({content_type})")
         print(f"Downloading from: {content_url}")
         
+        # Create a session with authentication
         session = requests.Session()
         session.auth = auth
         
+        # Download the actual image with authentication
         image_response = session.get(content_url)
         image_response.raise_for_status()
-
+        
+        # Convert image to base64
         encoded = base64.b64encode(image_response.content).decode()
         
+        # Create data URL
         data_url = f"data:{content_type};base64,{encoded}"
         
+        # Cache the image
         st.session_state.image_cache[image_id] = data_url
         print(f"Successfully fetched image {image_id}")
         
@@ -88,6 +98,7 @@ def get_image_base64(image_id):
     except requests.exceptions.HTTPError as e:
         print(f"HTTP Error fetching image {image_id}: {e}")
         
+        # Try alternative approach for restricted content
         if hasattr(e, 'response') and e.response.status_code == 403:
             print("Attempting alternative approach for restricted content...")
             return fetch_restricted_image(image_id, auth, zendesk_subdomain)
@@ -101,6 +112,7 @@ def get_image_base64(image_id):
 def fetch_restricted_image(image_id, auth, zendesk_subdomain):
     """Alternative approach for fetching restricted images"""
     
+    # Try direct API access to the attachment content
     url = f"https://{zendesk_subdomain}.zendesk.com/api/v2/help_center/articles/attachments/{image_id}/inline"
     
     print(f"Trying direct API access: {url}")
@@ -112,11 +124,14 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
         response = session.get(url)
         response.raise_for_status()
         
+        # Determine content type
         content_type = response.headers.get('Content-Type', 'image/png')
         
+        # Convert to base64
         encoded = base64.b64encode(response.content).decode()
         data_url = f"data:{content_type};base64,{encoded}"
         
+        # Cache the image
         st.session_state.image_cache[image_id] = data_url
         print(f"Successfully downloaded restricted image")
         return data_url
@@ -124,6 +139,7 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
     except requests.exceptions.HTTPError as e:
         print(f"Failed to fetch restricted image: {e}")
         
+        # One more attempt with a different endpoint
         try:
             url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
             print(f"Trying final approach: {url}")
@@ -135,11 +151,14 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
             response = requests.get(url, headers=headers)
             response.raise_for_status()
             
+            # Try to determine content type from headers
             content_type = response.headers.get('Content-Type', 'image/png')
             
+            # Convert to base64
             encoded = base64.b64encode(response.content).decode()
             data_url = f"data:{content_type};base64,{encoded}"
             
+            # Cache the image
             st.session_state.image_cache[image_id] = data_url
             print(f"Successfully downloaded restricted image with final approach")
             return data_url
@@ -155,83 +174,139 @@ def fetch_restricted_image(image_id, auth, zendesk_subdomain):
         return None
 
 # Function to process AI response and replace image references
-def process_response(response):
-    image_pattern = r'\[IMAGE: (\d+)\]'
-    
-    # Find all image references in the response
+def process_response(response, attachment_ids=None):
+    # Regular expression to find image references in the new format
+    image_pattern = r'!\[Image\]\(IMAGE_ID:(\d+)\)'
     image_matches = re.findall(image_pattern, response)
-    print(f"Found {len(image_matches)} image references in response")
     
-    # Replace each image reference with an HTML img tag
+    # Process images referenced in the text
     processed_response = response
+    zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
+    
+    # Track which images were already processed to avoid duplicates
+    processed_images = set()
+    
     for image_id in image_matches:
+        # Skip if we've already processed this image
+        if image_id in processed_images:
+            # Remove duplicate references
+            processed_response = processed_response.replace(f'![Image](IMAGE_ID:{image_id})', '')
+            continue
         
-        zendesk_subdomain = os.getenv("ZENDESK_SUBDOMAIN", "trilogyeffective")
-        image_url = f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}"
+        # Try multiple URL formats
+        image_urls = [
+            f"https://{zendesk_subdomain}.zendesk.com/hc/article_attachments/{image_id}",
+            f"https://{zendesk_subdomain}.zendesk.com/hc/en-us/article_attachments/{image_id}",
+            f"https://{zendesk_subdomain}.zendesk.com/api/v2/help_center/articles/attachments/{image_id}/inline"
+        ]
         
-        # Create HTML for the image with the description as alt text and caption
-        image_html = f"""
-        <div style="text-align: center; margin: 20px 0;">
-            <img src="{image_url}" style="max-width: 100%; height: auto; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-        </div>
-        """
+        # Use the first URL format for now
+        image_url = image_urls[0]
         
-        # Replace the image reference with the HTML
-        processed_response = processed_response.replace(f'[IMAGE: {image_id}]', image_html)
-        print(f"Successfully replaced image reference for {image_id}")
+        # Replace the reference with an img tag using the direct URL
+        img_html = f'<img src="{image_url}" alt="Image {image_id}" style="max-width: 100%; display: block; margin: 20px auto;" onerror="this.onerror=null; this.src=\'{image_urls[1]}\'; this.onerror=function(){{this.src=\'{image_urls[2]}\';}};">'
+        processed_response = processed_response.replace(f'![Image](IMAGE_ID:{image_id})', img_html)
+        
+        # Mark this image as processed
+        processed_images.add(image_id)
+        
+        # Log successful image processing
+        print(f"Processed image reference for ID: {image_id}")
+    
+    # If there are attachment_ids that weren't referenced in the text, don't add them
+    # We're removing the "Additional Images" section as requested
     
     return processed_response
 
-# Main function to handle the chat interface
-def main():
-    st.title("TIES Help Center Assistant")
-    
-    # Initialize the vector store
-    vectorstore = get_vectorstore()
-    
-    # Chat input
-    prompt = st.chat_input("Ask a question about TIES.Connect...")
-    
-    # Display conversation history
+# Function to display chat messages
+def display_chat_messages():
     for message in st.session_state.conversation_history:
         if message["role"] == "user":
             with st.chat_message("user"):
                 st.write(message["content"])
-        else:
+        elif message["role"] == "assistant":
             with st.chat_message("assistant"):
-                st.write(message["content"], unsafe_allow_html=True)
+                st.markdown(message["content"], unsafe_allow_html=True)
+
+# Function to display sources
+def display_sources():
+    if st.session_state.sources:
+        with st.expander("Sources", expanded=True):
+            for source in st.session_state.sources:
+                st.markdown(f"[{source['title']}]({source['url']})")
+
+# Main function
+def main():
+    # Custom CSS for styling
+    st.markdown("""
+    <style>
+    .stApp {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .stChatMessage {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .stChatMessage.user {
+        background-color: #f0f2f6;
+    }
+    .stChatMessage.assistant {
+        background-color: #e6f7ff;
+    }
+    .sources-section {
+        margin-top: 2rem;
+        padding: 1rem;
+        background-color: #f9f9f9;
+        border-radius: 0.5rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Header
+    st.title("TIES AI Assistant")
+    st.markdown("Ask me anything about TIES software and features.")
+
+    # Initialize vectorstore
+    with st.spinner("Loading knowledge base..."):
+        vectorstore = get_vectorstore()
+
+    # Display chat messages
+    display_chat_messages()
+
+    # Display sources
+    display_sources()
+
+    # Chat input
+    prompt = st.chat_input("Ask a question about TIES...")
     
-    # Process new user input
     if prompt:
-        # Add user message to chat history
+        # Add user message to conversation history
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
         
         # Display user message
         with st.chat_message("user"):
             st.write(prompt)
         
-        # Display assistant response with a spinner
+        # Get AI response
+        with st.spinner("Thinking..."):
+            answer, unique_sources, unique_attachment_ids = ask_question(prompt, st.session_state.conversation_history, vectorstore)
+            
+            # Process the response to handle image references
+            processed_answer = process_response(answer, unique_attachment_ids)
+            
+            # Update session state
+            st.session_state.conversation_history.append({"role": "assistant", "content": processed_answer})
+            st.session_state.sources = unique_sources
+            st.session_state.attachment_ids = unique_attachment_ids
+        
+        # Display AI response
         with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            with st.spinner("Thinking..."):
-                # Get response from AI
-                answer, unique_sources, unique_attachment_ids = ask_question(prompt, st.session_state.conversation_history, vectorstore)
-                
-                # Process the response to replace image references with actual images
-                processed_answer = process_response(answer)
-                
-                # Add assistant message to chat history
-                st.session_state.conversation_history.append({"role": "assistant", "content": processed_answer})
-                
-                # Display the processed answer
-                message_placeholder.write(processed_answer, unsafe_allow_html=True)
-                
-                # Display sources if available
-                if unique_sources:
-                    with st.expander("Sources"):
-                        for source in unique_sources:
-                            st.markdown(f"[{source['title']}]({source['url']})")
+            st.markdown(processed_answer, unsafe_allow_html=True)
+        
+        # Display sources
+        display_sources()
 
-# Run the main function
 if __name__ == "__main__":
     main()
