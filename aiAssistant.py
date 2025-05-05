@@ -26,7 +26,6 @@ embeddings = OpenAIEmbeddings(
 #if os.path.exists(index_path):
 #    shutil.rmtree(index_path)
 #    print(f"Deleted existing vector store at {index_path}")
-
 def get_vectorstore():
     
     # Check if the FAISS index already exists
@@ -317,7 +316,9 @@ DOCUMENTATION UPDATE GUIDANCE:
 - When you recognize that a user wants to update documentation, prioritize helping them find the right article to update.
 - Focus on guiding the user to the correct article rather than explaining how to perform the task they want to document.
 - Provide the exact title of the article that needs updating based on the user's description.
-- If multiple articles might be relevant, list them in order of relevance with brief explanations of each.
+- Include the exact URL of the article in your response to make it easy for the user to access it directly.
+- ONLY provide Zendesk URLs (https://trilogyeffective.zendesk.com/hc/en-us/articles/...) and NEVER provide Atlassian/Confluence URLs.
+- If multiple articles might be relevant, list them in order of relevance with their titles and URLs.
 - If no existing article seems to match what the user wants to update, suggest the most closely related articles as potential starting points.
 - Ask clarifying questions if needed to better understand which documentation the user is trying to update.
 - Remember that finding the right documentation to update is often the user's biggest challenge, not explaining the content itself.
