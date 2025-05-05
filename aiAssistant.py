@@ -19,9 +19,9 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Define paths
 index_path = "./faiss_index"
 
-if os.path.exists(index_path):
-    shutil.rmtree(index_path)
-    print(f"Deleted existing vector store at {index_path}")
+#if os.path.exists(index_path):
+#    shutil.rmtree(index_path)
+#    print(f"Deleted existing vector store at {index_path}")
 
 def get_vectorstore():
     # Force rebuild the index if there's an error
