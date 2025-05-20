@@ -1,14 +1,14 @@
 import os
-import shutil
 import json
+import traceback
 import openai
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_pinecone import PineconeVectorStore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 import re
-import traceback
+from pinecone import Pinecone, ServerlessSpec
 
 # Load environment variables
 load_dotenv()
@@ -16,121 +16,139 @@ load_dotenv()
 # Set up OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Define paths
-index_path = "./faiss_index"
+# Pinecone Configuration
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "trilogyai-docs")
 
+# Initialize embeddings
 embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-large",
-        dimensions=3072
-    )
-#if os.path.exists(index_path):
-#    shutil.rmtree(index_path)
-#    print(f"Deleted existing vector store at {index_path}")
-def get_vectorstore():
+    model="text-embedding-3-large",
+    dimensions=3072
+)
+
+def initialize_pinecone():
+    """Initialize Pinecone client and return it"""
+    # Updated Pinecone initialization for newer SDK
+    pc = Pinecone(api_key=PINECONE_API_KEY)
     
-    # Check if the FAISS index already exists
-    if os.path.exists(index_path):
-        try:
-            print("Loading existing vector store...")
-            embeddings = OpenAIEmbeddings()
-            vectorstore = FAISS.load_local(
-                index_path, 
-                embeddings, 
-                allow_dangerous_deserialization=True
+    # Check if index exists, if not, create it
+    if PINECONE_INDEX_NAME not in pc.list_indexes().names():
+        print(f"Creating new Pinecone index: {PINECONE_INDEX_NAME}")
+        pc.create_index(
+            name=PINECONE_INDEX_NAME,
+            dimension=3072,  # For text-embedding-3-large
+            metric="cosine",
+            spec=ServerlessSpec(
+                cloud="aws",
+                region=PINECONE_ENVIRONMENT
             )
-            print("Vector store loaded successfully")
+        )
+        print(f"Created index: {PINECONE_INDEX_NAME}")
+    else:
+        print(f"Using existing Pinecone index: {PINECONE_INDEX_NAME}")
+    
+    return pc
+
+def get_vectorstore():
+    """Get or create Pinecone vector store"""
+    
+    try:
+        # Connect to Pinecone with updated initialization
+        pc = initialize_pinecone()
+        
+        # Try to load the existing vector store
+        try:
+            print("Connecting to existing Pinecone vector store...")
+            # Use PineconeVectorStore with the new Pinecone SDK
+            vectorstore = PineconeVectorStore(
+                index_name=PINECONE_INDEX_NAME,
+                embedding=embeddings,
+                text_key="text"  # The field where text content is stored
+            )
             
             # Test the vectorstore with a simple query to ensure it works
-            try:
-                test_docs = vectorstore.similarity_search("test", k=1)
-                print("Vector store tested successfully")
-            except Exception as e:
-                print(f"Error testing vector store: {e}")
-                print("Rebuilding index...")
-                
+            test_docs = vectorstore.similarity_search("test", k=1)
+            print("Vector store connection tested successfully")
+            return vectorstore
+            
         except Exception as e:
-            print(f"Error loading vector store: {e}")
-            print("Rebuilding index...")
+            print(f"Error connecting to Pinecone vector store: {e}")
+            print("Creating new vectors in Pinecone...")
+            
+            # If the index is empty or we can't connect properly, we'll load documents
     
-    else:
-        print("Creating new vector store...")
+    except Exception as e:
+        print(f"Error initializing Pinecone: {e}")
+        traceback.print_exc()
+        raise e
+    
+    # If we get here, we need to create a new vector store or add data to it
+    
+    # Load the JSON file
+    with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    documents = []
+    
+    # Process each document in the JSON
+    for doc in data.get("documents", []):
+        # Create a document with the content and metadata
+        content = doc.get("full_content", "")
         
-        # Remove the old index if it exists
-        if os.path.exists(index_path):
-            import shutil
-            try:
-                shutil.rmtree(index_path)
-                print(f"Removed old index at {index_path}")
-            except Exception as e:
-                print(f"Error removing old index: {e}")
+        # If no content, use a simple title + id format
+        if not content:
+            content = f"# {doc.get('title', 'Untitled')}\n\n"
         
-        # Load the JSON file
-        with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
+        # Create metadata
+        metadata = {
+            "title": doc.get("title", "Unknown"),
+            "article_id": doc.get("id", ""),
+            "last_updated": doc.get("last_updated", ""),
+            "url": doc.get("url", "")
+        }
         
-        documents = []
-        
-        # Process each document in the JSON
-        for doc in data.get("documents", []):
-            # Create a document with the content and metadata
-            content = doc.get("full_content", "")
-            
-            # If no content, use a simple title + id format
-            if not content:
-                content = f"# {doc.get('title', 'Untitled')}\n\n"
-            
-            # Create metadata
-            metadata = {
-                "title": doc.get("title", "Unknown"),
-                "article_id": doc.get("id", ""),
-                "last_updated": doc.get("last_updated", ""),
-                "url": doc.get("url", "")
-            }
-            
-            # Create document
-            document = Document(page_content=content, metadata=metadata)
-            documents.append(document)
-        
-        print(f"Loaded {len(documents)} documents")
+        # Create document
+        document = Document(page_content=content, metadata=metadata)
+        documents.append(document)
+    
+    print(f"Loaded {len(documents)} documents")
 
-        # 2. Create a text splitter for chunking
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,  # Smaller chunk size
-            chunk_overlap=100,  # Smaller overlap
-            separators=["\n\n", "\n", ". ", " ", ""]
-        )
+    # 2. Create a text splitter for chunking
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2000,  # Smaller chunk size
+        chunk_overlap=100,  # Smaller overlap
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    
+    # 3. Split documents into chunks
+    chunks = text_splitter.split_documents(documents)
+    print(f"Split into {len(chunks)} chunks")
+    
+    # 4. Create embeddings and vector store
+    # 5. Create vector store in batches
+    batch_size = 100  # Process 100 chunks at a time
+    
+    # Initialize empty Pinecone vector store
+    vectorstore = PineconeVectorStore.from_documents(
+        documents=[],  # Start with empty docs, we'll add in batches
+        embedding=embeddings,
+        index_name=PINECONE_INDEX_NAME,
+        text_key="text"  # Where document content will be stored
+    )
+    
+    for i in range(0, len(chunks), batch_size):
+        end_idx = min(i + batch_size, len(chunks))
+        print(f"Processing batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1} (chunks {i} to {end_idx-1})")
         
-        # 3. Split documents into chunks
-        chunks = text_splitter.split_documents(documents)
-        print(f"Split into {len(chunks)} chunks")
+        batch = chunks[i:end_idx]
         
-        # 4. Create embeddings
-        embeddings = OpenAIEmbeddings()
+        # Add documents to vector store
+        vectorstore.add_documents(batch)
         
-        # 5. Create vector store in batches
-        batch_size = 100  # Process 100 chunks at a time
-        vectorstore = None
-        
-        for i in range(0, len(chunks), batch_size):
-            end_idx = min(i + batch_size, len(chunks))
-            print(f"Processing batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1} (chunks {i} to {end_idx-1})")
-            
-            batch = chunks[i:end_idx]
-            
-            if vectorstore is None:
-                # Create new vectorstore with first batch
-                vectorstore = FAISS.from_documents(batch, embeddings)
-            else:
-                # Add subsequent batches to existing vectorstore
-                vectorstore.add_documents(batch)
-            
-            print(f"Processed batch {i//batch_size + 1}")
-        
-        print("Vector store created successfully")
-        
-        # 6. Save the vector store
-        vectorstore.save_local(index_path)
-        print(f"Vector store saved to {index_path}")
+        print(f"Processed batch {i//batch_size + 1}")
+    
+    print("Vector store created successfully")
     
     return vectorstore
 
@@ -371,4 +389,3 @@ HANDLING UNANSWERABLE QUESTIONS:
     answer = response.choices[0].message.content
     
     return answer, unique_sources, []
-    
