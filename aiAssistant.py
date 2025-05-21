@@ -29,15 +29,13 @@ embeddings = OpenAIEmbeddings(
 
 def initialize_pinecone():
     """Initialize Pinecone client and return it"""
-    # Updated Pinecone initialization for newer SDK
     pc = Pinecone(api_key=PINECONE_API_KEY)
     
-    # Check if index exists, if not, create it
     if PINECONE_INDEX_NAME not in pc.list_indexes().names():
         print(f"Creating new Pinecone index: {PINECONE_INDEX_NAME}")
         pc.create_index(
             name=PINECONE_INDEX_NAME,
-            dimension=3072,  # For text-embedding-3-large
+            dimension=3072,
             metric="cosine",
             spec=ServerlessSpec(
                 cloud="aws",
@@ -54,20 +52,16 @@ def get_vectorstore():
     """Get or create Pinecone vector store"""
     
     try:
-        # Connect to Pinecone with updated initialization
         pc = initialize_pinecone()
         
-        # Try to load the existing vector store
         try:
             print("Connecting to existing Pinecone vector store...")
-            # Use PineconeVectorStore with the new Pinecone SDK
             vectorstore = PineconeVectorStore(
                 index_name=PINECONE_INDEX_NAME,
                 embedding=embeddings,
-                text_key="text"  # The field where text content is stored
+                text_key="text"
             )
             
-            # Test the vectorstore with a simple query to ensure it works
             test_docs = vectorstore.similarity_search("test", k=1)
             print("Vector store connection tested successfully")
             return vectorstore
@@ -75,32 +69,23 @@ def get_vectorstore():
         except Exception as e:
             print(f"Error connecting to Pinecone vector store: {e}")
             print("Creating new vectors in Pinecone...")
-            
-            # If the index is empty or we can't connect properly, we'll load documents
     
     except Exception as e:
         print(f"Error initializing Pinecone: {e}")
         traceback.print_exc()
         raise e
     
-    # If we get here, we need to create a new vector store or add data to it
-    
-    # Load the JSON file
     with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
         data = json.load(f)
     
     documents = []
     
-    # Process each document in the JSON
     for doc in data.get("documents", []):
-        # Create a document with the content and metadata
         content = doc.get("full_content", "")
         
-        # If no content, use a simple title + id format
         if not content:
             content = f"# {doc.get('title', 'Untitled')}\n\n"
         
-        # Create metadata
         metadata = {
             "title": doc.get("title", "Unknown"),
             "article_id": doc.get("id", ""),
@@ -108,7 +93,6 @@ def get_vectorstore():
             "url": doc.get("url", "")
         }
         
-        # Create document
         document = Document(page_content=content, metadata=metadata)
         documents.append(document)
     
@@ -225,9 +209,9 @@ def ask_question(question, chat_history=None, vectorstore=None):
     
     # Create a retriever from the vector store
     retriever = vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 6}
-    )
+    search_type="mmr",
+    search_kwargs={"k": 3, "fetch_k": 10, "lambda_mult": 0.7}
+)
     
     # Get sources and images
     docs = retriever.get_relevant_documents(question)
