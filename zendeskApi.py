@@ -13,7 +13,7 @@ class ZendeskDocFetcher:
         # Configuration
         self.zendesk_subdomain = "trilogyeffective"
         self.zendesk_user = "TIESConnectHelpCenterBot@trilogyes.com"
-        self.encoded_token = os.environ.get('ZENDESK_TOKEN')
+        self.encoded_token = os.environ.get('ZENDESK_API_TOKEN')
         
         # Decode the token if it's base64 encoded
         if self.encoded_token.endswith('=='):
