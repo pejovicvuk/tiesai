@@ -3,17 +3,12 @@ from flask_cors import CORS
 import os
 import json
 
-# Import your existing functions
-# Assuming ask_question and get_vectorstore are from your existing code
 from aiAssistant import ask_question, get_vectorstore
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for cross-domain requests
+CORS(app) 
 
-# Load the vector store once at startup
-print("Initializing vector store...")
 vectorstore = get_vectorstore()
-print("Vector store initialized!")
 
 @app.route('/api/ask', methods=['POST'])
 def ask():
@@ -29,7 +24,6 @@ def ask():
         if not question:
             return jsonify({"error": "No question provided"}), 400
         
-        # Convert chat history format if needed
         formatted_chat_history = []
         for item in chat_history:
             formatted_chat_history.append({

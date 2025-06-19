@@ -3,6 +3,10 @@ langchain-community
 langchain-openai
 langchain-core
 langchain-text-splitters
-faiss-cpu
+pinecone-client
+langchain-pinecone
+openai
 python-dotenv
-pymongo
+requests
+flask
+flask-cors
