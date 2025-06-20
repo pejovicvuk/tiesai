@@ -5,10 +5,7 @@ import openai
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
 import re
-from pinecone import Pinecone, ServerlessSpec
 
 # Load environment variables
 load_dotenv()
@@ -19,122 +16,34 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Pinecone Configuration
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
-PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "trilogyai-docs")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "ties-docs")
 
 # Initialize embeddings
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-large",
-    dimensions=3072
+    dimensions=2048
 )
 
-def initialize_pinecone():
-    """Initialize Pinecone client and return it"""
-    pc = Pinecone(api_key=PINECONE_API_KEY)
-    
-    if PINECONE_INDEX_NAME not in pc.list_indexes().names():
-        print(f"Creating new Pinecone index: {PINECONE_INDEX_NAME}")
-        pc.create_index(
-            name=PINECONE_INDEX_NAME,
-            dimension=3072,
-            metric="cosine",
-            spec=ServerlessSpec(
-                cloud="aws",
-                region=PINECONE_ENVIRONMENT
-            )
-        )
-        print(f"Created index: {PINECONE_INDEX_NAME}")
-    else:
-        print(f"Using existing Pinecone index: {PINECONE_INDEX_NAME}")
-    
-    return pc
-
 def get_vectorstore():
-    """Get or create Pinecone vector store"""
+    """Connect to existing Pinecone vector store"""
     
     try:
-        pc = initialize_pinecone()
+        print("Connecting to existing Pinecone vector store...")
+        vectorstore = PineconeVectorStore(
+            index_name=PINECONE_INDEX_NAME,
+            embedding=embeddings,
+            text_key="content"
+        )
         
-        try:
-            print("Connecting to existing Pinecone vector store...")
-            vectorstore = PineconeVectorStore(
-                index_name=PINECONE_INDEX_NAME,
-                embedding=embeddings,
-                text_key="text"
-            )
-            
-            test_docs = vectorstore.similarity_search("test", k=1)
-            print("Vector store connection tested successfully")
-            return vectorstore
-            
-        except Exception as e:
-            print(f"Error connecting to Pinecone vector store: {e}")
-            print("Creating new vectors in Pinecone...")
-    
+        # Test the connection by doing a simple search
+        test_docs = vectorstore.similarity_search("test", k=1)
+        print("Vector store connection tested successfully")
+        return vectorstore
+        
     except Exception as e:
-        print(f"Error initializing Pinecone: {e}")
+        print(f"Error connecting to Pinecone vector store: {e}")
         traceback.print_exc()
         raise e
-    
-    with open("processed_zendesk_docs_v2.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    documents = []
-    
-    for doc in data.get("documents", []):
-        content = doc.get("full_content", "")
-        
-        if not content:
-            content = f"# {doc.get('title', 'Untitled')}\n\n"
-        
-        metadata = {
-            "title": doc.get("title", "Unknown"),
-            "article_id": doc.get("id", ""),
-            "last_updated": doc.get("last_updated", ""),
-            "url": doc.get("url", "")
-        }
-        
-        document = Document(page_content=content, metadata=metadata)
-        documents.append(document)
-    
-    print(f"Loaded {len(documents)} documents")
-
-    # 2. Create a text splitter for chunking
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,  # Smaller chunk size
-        chunk_overlap=100,  # Smaller overlap
-        separators=["\n\n", "\n", ". ", " ", ""]
-    )
-    
-    # 3. Split documents into chunks
-    chunks = text_splitter.split_documents(documents)
-    print(f"Split into {len(chunks)} chunks")
-    
-    # 4. Create embeddings and vector store
-    # 5. Create vector store in batches
-    batch_size = 100  # Process 100 chunks at a time
-    
-    # Initialize empty Pinecone vector store
-    vectorstore = PineconeVectorStore.from_documents(
-        documents=[],  # Start with empty docs, we'll add in batches
-        embedding=embeddings,
-        index_name=PINECONE_INDEX_NAME,
-        text_key="text"  # Where document content will be stored
-    )
-    
-    for i in range(0, len(chunks), batch_size):
-        end_idx = min(i + batch_size, len(chunks))
-        print(f"Processing batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1} (chunks {i} to {end_idx-1})")
-        
-        batch = chunks[i:end_idx]
-        
-        # Add documents to vector store
-        vectorstore.add_documents(batch)
-        
-        print(f"Processed batch {i//batch_size + 1}")
-    
-    print("Vector store created successfully")
-    
-    return vectorstore
 
 def get_attachment_ids_for_articles(article_ids):
     attachment_ids = []
@@ -206,16 +115,36 @@ def extract_images_from_structure(structure):
 def ask_question(question, chat_history=None, vectorstore=None):
     if vectorstore is None:
         vectorstore = get_vectorstore()
+
+    # 1. Retrieve documents with their similarity scores to filter by relevance.
+    # We fetch a larger number of documents (k=5) to have a pool to select from.
+    docs_and_scores = vectorstore.similarity_search_with_score(
+        question,
+        k=5
+    )
+
+    # 2. Filter documents by a relevance threshold to ensure source quality.
+    # The threshold is tunable (0.0 to 1.0 for cosine similarity).
+    # A score of 0.75 is a good starting point.
+    RELEVANCE_THRESHOLD = 0.45
+    relevant_docs = []
+    print("--- Document Relevance Scores ---")
+    for doc, score in docs_and_scores:
+        # The score from similarity_search_with_score is typically distance (lower is better),
+        # but LangChain normalizes some to be similarity scores. Assuming higher is better.
+        # We will treat it as similarity where > threshold is good.
+        print(f"  - Score: {score:.4f}, Title: {doc.metadata.get('title', 'N/A')}")
+        if score > RELEVANCE_THRESHOLD:
+            relevant_docs.append(doc)
+
+    # Use only the relevant documents for the rest of the process
+    docs = relevant_docs
     
-    # Create a retriever from the vector store
-    retriever = vectorstore.as_retriever(
-    search_type="mmr",
-    search_kwargs={"k": 3, "fetch_k": 10, "lambda_mult": 0.7}
-)
-    
-    # Get sources and images
-    docs = retriever.get_relevant_documents(question)
-    
+    if not docs:
+        print("No relevant documents found above the threshold. Proceeding without sources.")
+    else:
+        print(f"Found {len(docs)} relevant documents above threshold {RELEVANCE_THRESHOLD}.")
+
     # Extract source information with URLs for linking
     sources = []
     article_ids = []
@@ -232,7 +161,7 @@ def ask_question(question, chat_history=None, vectorstore=None):
         
         # Ensure we have a valid URL
         if not url or not url.startswith("http"):
-            url = f"https://trilogyeffective.zendesk.com/hc/en-us/articles/{article_id}"
+            url = f"http://localhost:51744/#/help/{article_id}" #change to the actual TIES url
         
         sources.append({
             "title": title,
@@ -275,22 +204,22 @@ def ask_question(question, chat_history=None, vectorstore=None):
 ## About TIES Software
 TIES (The Integrated Energy System) is a modern, cloud-native solution that centralizes trading, risk, and operational workflows. It is purpose-built for producers, gatherers, pipeline & storage operators, plant processors, and traders, combining ETRM functionality with deep operational capabilities.
 
-Key components of TIES include:
-- Plant & Production Accounting
-- Reporting & Forecasting
-- Financial Management
-- Compliance & Regulatory Reporting
-- Settlements & Balancing
-- Data & Systems Management
-
-Your role is to provide expert support to users navigating this comprehensive platform, helping them understand features, workflows, and solutions to their technical challenges with the software.
+## Core Directives & Boundaries
+- Your single purpose is to answer questions about TIES software using the provided documentation.
+- If a user asks about something unrelated to TIES (e.g., general knowledge, news, other software), politely state that you can only answer questions about TIES.
+- **Strictly avoid:**
+  - Expressing personal or political opinions.
+  - Recommending or comparing TIES with competitor products.
+  - Engaging in off-topic conversations.
+- You are an informational assistant. Do not pretend to perform actions, take user orders, or make changes to any system. Your role is to explain how a user can do something, not to do it for them.
+- Maintain a helpful, natural, and conversational tone.
 
 Context:
 {context}
 
 {image_context}
 
-Guidelines:
+## Answer Guidelines
 - ALWAYS maintain context from previous questions in the conversation.
 - If you don't immediately know the answer, look for related concepts in the context that might help.
 - NEVER just say "I don't know" without suggesting related topics or asking clarifying questions.
@@ -305,28 +234,22 @@ Guidelines:
 - When appropriate, include examples to illustrate concepts.
 - If you can't provide complete information on a topic, offer to explain what you do know and ask if the user would like more details.
 - Whenever you make a reference to TIES.Connect, just refer to it as TIES.
-- DO NOT include URLs or links in your main response - the sources will be automatically displayed in a separate section.
 
-SOURCE GUIDELINES:
-- DO NOT include URLs or links in your main response text.
-- If users ask for sources or where to find information, tell them to check the Sources section below your answer.
-- You can mention article titles when relevant, but do not include the URLs.
-- The sources will be automatically displayed in the "Sources" section below your response.
-- When users ask "where can I find more information", direct them to check the Sources section rather than providing links.
+## Source Guidelines
+- **IMPORTANT:** Never include URLs or web links in your main response. Sources are handled automatically.
+- If users ask for sources or where to find information, tell them to check the "Sources" section that appears with your answer.
+- You can mention article titles when relevant, but do not include URLs.
 
-DOCUMENTATION UPDATE GUIDANCE:
+## Documentation Update Guidance
 - When you recognize that a user wants to update documentation, prioritize helping them find the right article to update.
 - Focus on guiding the user to the correct article rather than explaining how to perform the task they want to document.
 - Provide the exact title of the article that needs updating based on the user's description.
-- ALWAYS use the exact URL from the "url" field in the document metadata - never construct URLs yourself.
-- Do not modify, change, or reconstruct URLs in any way - use them exactly as they appear in the vector database.
-- You can find titles and URLs of the articles in the database under the "title" and "url" fields in the document metadata.
-- If multiple articles might be relevant, list them in order of relevance with their titles and URLs.
+- If multiple articles might be relevant, list their titles in order of relevance.
 - If no existing article seems to match what the user wants to update, suggest the most closely related articles as potential starting points.
 - Ask clarifying questions if needed to better understand which documentation the user is trying to update.
 - Remember that finding the right documentation to update is often the user's biggest challenge, not explaining the content itself.
 
-HANDLING UNANSWERABLE QUESTIONS:
+## Handling Unanswerable Questions
 - Consider a question unanswerable if:
 - The retrieved documents don't mention the specific topic or process being asked about
 - The documents mention the topic but don't provide clear instructions or details
@@ -371,5 +294,5 @@ HANDLING UNANSWERABLE QUESTIONS:
     
     # Extract the assistant's response
     answer = response.choices[0].message.content
-    
+    print(unique_sources)
     return answer, unique_sources, []

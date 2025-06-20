@@ -331,13 +331,13 @@ class TIESArticleProcessor:
             metadata = {
                 "category": category,
                 "article_id": article_id,
+                "title": title,
                 "user_roles": user_roles,
                 "keywords": keywords,
                 "technical_level": technical_level,
                 "business_impact": business_impact,
                 "content_length": len(chunk_content),
                 "chunk_type": "ties_documentation",
-                "version": version,
                 "created_at": article.get("created_at", ""),
                 "updated_at": article.get("updated_at", "")
             }
@@ -490,7 +490,7 @@ class TIESArticleProcessor:
         return all_chunks
 
     def upload_to_pinecone(self, chunks: List[Dict[str, Any]], 
-                          index_name: str = "ties-docs",
+                          index_name: str = os.getenv("PINECONE_INDEX_NAME"),
                           batch_size: int = 50):
         """Upload chunks to Pinecone using LangChain + OpenAI embeddings"""
         
@@ -501,7 +501,7 @@ class TIESArticleProcessor:
         # Initialize OpenAI embeddings
         embeddings = OpenAIEmbeddings(
             model="text-embedding-3-large",
-            dimensions=1024,
+            dimensions=2048,
             openai_api_key=os.getenv('OPENAI_API_KEY')
         )
         
