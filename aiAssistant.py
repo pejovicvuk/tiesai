@@ -126,7 +126,7 @@ def ask_question(question, chat_history=None, vectorstore=None):
     # 2. Filter documents by a relevance threshold to ensure source quality.
     # The threshold is tunable (0.0 to 1.0 for cosine similarity).
     # A score of 0.75 is a good starting point.
-    RELEVANCE_THRESHOLD = 0.45
+    RELEVANCE_THRESHOLD = 0.40
     relevant_docs = []
     print("--- Document Relevance Scores ---")
     for doc, score in docs_and_scores:
