@@ -161,7 +161,7 @@ def ask_question(question, chat_history=None, vectorstore=None):
         
         # Ensure we have a valid URL
         if not url or not url.startswith("http"):
-            url = f"http://localhost:51744/#/help/{article_id}" #change to the actual TIES url
+            url = f"help/{article_id}" #change to the actual TIES url
         
         sources.append({
             "title": title,
@@ -270,10 +270,24 @@ Context:
     if chat_history:
         # Ensure chat history is in the correct format
         for message in chat_history:
-            if isinstance(message, dict) and "role" in message and "content" in message:
-                # Only include user and assistant messages, not system messages
-                if message["role"] in ["user", "assistant"]:
-                    messages.append(message)
+            # Normalize keys to lowercase to handle case-insensitivity from clients like C#
+            if isinstance(message, dict):
+                normalized_message = {k.lower(): v for k, v in message.items()}
+                
+                # Check for presence and ensure the 'role' value is not None before processing
+                if "role" in normalized_message and normalized_message["role"] and "content" in normalized_message:
+                    # Standardize role to lowercase for consistent processing
+                    role = normalized_message["role"].lower()
+                    
+                    # Only include user and assistant messages, not system messages
+                    if role in ["user", "assistant"]:
+                        # Append with standardized lowercase keys for the OpenAI API, handle None content
+                        messages.append({
+                            "role": role,
+                            "content": normalized_message["content"] or ""
+                        })
+                else:
+                    print(f"Warning: Skipping invalid message format in chat history (missing or None 'role'/'content'): {message}")
             else:
                 print(f"Warning: Skipping invalid message format in chat history: {message}")
     

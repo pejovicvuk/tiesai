@@ -25,11 +25,20 @@ def ask():
             return jsonify({"error": "No question provided"}), 400
         
         formatted_chat_history = []
-        for item in chat_history:
-            formatted_chat_history.append({
-                "role": item.get("role"),
-                "content": item.get("content")
-            })
+        if chat_history:
+            for item in chat_history:
+                # Normalize keys to lowercase to handle case-insensitivity
+                if isinstance(item, dict):
+                    normalized_item = {k.lower(): v for k, v in item.items()}
+                    
+                    # Check for presence and ensure the 'role' value is not None
+                    if "role" in normalized_item and normalized_item.get("role") and "content" in normalized_item:
+                        formatted_chat_history.append({
+                            "role": normalized_item["role"],
+                            "content": normalized_item["content"] or ""
+                        })
+                    else:
+                        print(f"API Warning: Skipping invalid chat history item (missing or None role/content): {item}")
         
         # Get response from your existing function
         answer, sources, attachment_ids = ask_question(question, formatted_chat_history, vectorstore)
