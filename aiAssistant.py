@@ -260,7 +260,7 @@ Context:
 - Instead, acknowledge the limitation by saying: "I don't have detailed information about [specific topic] in my knowledge base"
 - Then offer related information: "However, I can provide information on related topics such as [list 2-3 related topics from the context]"
 - Always provide an option to contact support: "Would you like me to share what I know about these related topics, or would you prefer to contact our support team for specific assistance?"
-- If the user chooses support, provide: "You can reach our support team by submitting a ticket through the TIES support portal or by emailing support@trilogyenergysolutions.com"
+- If the user chooses support, provide: "You can reach our support team by submitting a ticket through the TIES support portal or by emailing support@trilogyes.com"
 """
     
     # Create the chat history for the conversation
